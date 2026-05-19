@@ -15,11 +15,10 @@ import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
 import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
-import { useMyRoundPrediction } from "@/hooks/useMyRoundPrediction";
 import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
-import { ApiError, apiFetch } from "@/lib/api/client";
-import type { ApiPlacePredictionResponse } from "@/lib/api/types";
+import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
+import type { ApiPlacePredictionResponse, ApiPrediction } from "@/lib/api/types";
 import { demoPlayers, demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
 import { rank, withUserPin } from "@/lib/scoring";
 
@@ -55,19 +54,47 @@ export default function ActiveRoundPage() {
   const [resolved, setResolved] = useState(false);
   const placed = myPin !== null;
 
-  // Rehydrate the user's pin across reloads. /api/rounds/{id}/my-prediction
-  // returns the persisted placement (or null) so the page knows whether the
-  // user already played this round. Without this the local state always
-  // starts at null and the user loses their pin on F5.
-  const {
-    prediction: persistedPrediction,
-    isLoading: predictionLoading,
-    refetch: refetchMyPrediction,
-  } = useMyRoundPrediction(liveRound?.id ?? null);
+  // Rehydrate the user's pin across reloads by hitting
+  // /api/rounds/{id}/my-prediction directly. Inlined here (rather than as a
+  // separate hook) because Next.js 16 + Turbopack was code-splitting the
+  // hook into an orphan chunk that the SSR'd HTML never script-tagged,
+  // so the hook never ran. Inlining keeps it in the page's own chunk.
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionFetchBump, setPredictionFetchBump] = useState(0);
+  const refetchMyPrediction = () => setPredictionFetchBump((n) => n + 1);
+
   useEffect(() => {
-    if (!persistedPrediction || myPin !== null) return;
-    setMyPin({ lat: persistedPrediction.lat, lng: persistedPrediction.lng });
-  }, [persistedPrediction, myPin]);
+    const roundId = liveRound?.id;
+    if (!roundId) return;
+    if (!getValidToken()) return;
+
+    setPredictionLoading(true);
+    const ctrl = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await apiFetch<ApiPrediction | null>(
+          `/rounds/${roundId}/my-prediction`,
+          { signal: ctrl.signal },
+        );
+        if (cancelled || !data) return;
+        // Only hydrate if we don't already have a local pin (avoids
+        // clobbering a just-placed pin with the same coords).
+        setMyPin((prev) => prev ?? { lat: data.lat, lng: data.lng });
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        // Silent — page falls through to anonymous mode.
+      } finally {
+        if (!cancelled) setPredictionLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+    };
+  }, [liveRound?.id, predictionFetchBump]);
 
   // Local pool/participants override populated from /predictions response.
   // (Live round state could lag — we got the authoritative numbers back from
