@@ -43,7 +43,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrains.variable}`}>
-      <body className="min-h-screen overflow-hidden">{children}</body>
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }
