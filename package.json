@@ -1,0 +1,18 @@
+{
+  "name": "geocast",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Daily geo-prediction game — drop a pin, predict the world.",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter ./apps/web dev",
+    "build": "pnpm --filter ./apps/web build",
+    "start": "pnpm --filter ./apps/web start",
+    "lint": "pnpm --filter ./apps/web lint",
+    "typecheck": "pnpm --filter ./apps/web typecheck"
+  },
+  "packageManager": "pnpm@10.29.2"
+}

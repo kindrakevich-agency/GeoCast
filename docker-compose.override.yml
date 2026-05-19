@@ -1,0 +1,27 @@
+services:
+  web:
+    build:
+      target: dev
+    command: pnpm dev
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - WATCHPACK_POLLING=true
+
+  api:
+    build:
+      target: dev
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      - APP_ENV=dev
+
+  db:
+    ports:
+      - "3306:3306"
+
+  redis:
+    ports:
+      - "6379:6379"
