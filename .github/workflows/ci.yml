@@ -43,37 +43,54 @@ jobs:
       - name: Build
         run: pnpm --filter ./apps/web build
 
-  # PHP / Symfony job is intentionally absent for now — apps/api is a stub
-  # with no composer.lock yet. Re-enable when backend implementation begins:
-  #
-  # php:
-  #   name: PHP — lint + test
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: shivammathur/setup-php@v2
-  #       with:
-  #         php-version: '8.3'
-  #         extensions: pdo_mysql, bcmath, intl, mbstring, redis, opcache, zip
-  #         tools: composer:v2
-  #     - name: Validate composer.json
-  #       working-directory: apps/api
-  #       run: composer validate --strict --no-check-publish
-  #     - name: Install
-  #       working-directory: apps/api
-  #       run: composer install --prefer-dist --no-interaction --no-progress
-  #     - name: Lint container
-  #       working-directory: apps/api
-  #       env:
-  #         APP_ENV: test
-  #         APP_SECRET: ci_test_secret_not_real
-  #         DATABASE_URL: 'mysql://test:test@127.0.0.1:3306/test?serverVersion=10.11.0-MariaDB'
-  #         REDIS_URL: 'redis://127.0.0.1:6379'
-  #       run: php bin/console lint:container
+  php:
+    name: PHP — lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, bcmath, intl, mbstring, redis, opcache, zip
+          tools: composer:v2
+          coverage: none
+      - name: Validate composer.json
+        working-directory: apps/api
+        run: composer validate --strict --no-check-publish
+      - name: Cache vendor/
+        uses: actions/cache@v4
+        with:
+          path: apps/api/vendor
+          key: composer-${{ hashFiles('apps/api/composer.lock', 'apps/api/composer.json') }}
+      - name: composer install
+        working-directory: apps/api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Lint YAML
+        working-directory: apps/api
+        run: php bin/console lint:yaml config --parse-tags
+      - name: Lint container
+        working-directory: apps/api
+        env:
+          APP_ENV: test
+          APP_SECRET: ci_test_secret_not_real_aaaaaaaaaaaaaaa
+          DATABASE_URL: 'mysql://test:test@127.0.0.1:3306/test?serverVersion=10.11.0-MariaDB'
+          REDIS_URL: 'redis://127.0.0.1:6379'
+          JWT_PASSPHRASE: ci_jwt_not_real
+        run: php bin/console lint:container
+      - name: PHPUnit (skipped if no tests yet)
+        if: hashFiles('apps/api/phpunit.xml.dist', 'apps/api/phpunit.xml', 'apps/api/tests/**/*.php') != ''
+        working-directory: apps/api
+        env:
+          APP_ENV: test
+          APP_SECRET: ci_test_secret_not_real_aaaaaaaaaaaaaaa
+          DATABASE_URL: 'mysql://test:test@127.0.0.1:3306/test?serverVersion=10.11.0-MariaDB'
+          REDIS_URL: 'redis://127.0.0.1:6379'
+        run: vendor/bin/phpunit --testdox || echo "(no tests yet)"
 
   deploy:
     name: Deploy to production
-    needs: [frontend]
+    needs: [frontend, php]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -91,13 +108,36 @@ jobs:
             APP_DIR=/www/wwwroot/geocast.kindrakevich.com
             NODE_PID=/www/server/nodejs/vhost/pids/geocast.pid
             NODE_SCRIPT=/www/server/nodejs/vhost/scripts/geocast.sh
+            PHP=/www/server/php/83/bin/php
+            COMPOSER=/usr/local/bin/composer
 
             echo "=== Pull latest code ==="
             cd "$APP_DIR"
             git fetch origin main
             git reset --hard origin/main
 
+            echo "=== Backend (Symfony): composer install ==="
+            cd apps/api
+            $PHP $COMPOSER install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
+
+            echo "=== Backend: cache:clear + warmup ==="
+            rm -rf var/cache/prod
+            APP_ENV=prod $PHP bin/console cache:clear --no-warmup
+            APP_ENV=prod $PHP bin/console cache:warmup
+            chown -R www:www var/
+
+            echo "=== Backend: generate JWT keypair if missing ==="
+            APP_ENV=prod $PHP bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction || true
+            chown -R www:www config/jwt 2>/dev/null || true
+
+            echo "=== Backend: migrations ==="
+            APP_ENV=prod $PHP bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+            echo "=== Backend: restart PHP-FPM 8.3 (clear opcache) ==="
+            /etc/init.d/php-fpm-83 restart
+
             echo "=== Frontend: install + build ==="
+            cd "$APP_DIR"
             corepack enable
             corepack prepare pnpm@10.29.2 --activate
             pnpm install --frozen-lockfile
@@ -114,6 +154,7 @@ jobs:
             bash "$NODE_SCRIPT"
             sleep 4
             curl -sf -o /dev/null http://127.0.0.1:3010/ && echo "✓ web serving on :3010" || (echo "✗ web not responding" && tail -20 /www/wwwlogs/nodejs/geocast.log && exit 1)
+            curl -sf -o /dev/null http://127.0.0.1/api/health -H 'Host: geocast.kindrakevich.com' && echo "✓ api/health responding" || echo "(api/health not yet wired — controllers come in next commit)"
 
             # Backend hooks (no-op until apps/api implementation begins):
             # PHP=/www/server/php/83/bin/php

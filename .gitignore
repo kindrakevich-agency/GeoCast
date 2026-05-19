@@ -1,5 +1,6 @@
 # env / secrets
-.env
+# NOTE: apps/api/.env and apps/web/.env are committed Symfony/Next defaults
+# (no secrets). Only the .local overrides hold real values.
 .env.local
 .env.*.local
 .env.production
