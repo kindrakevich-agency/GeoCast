@@ -94,6 +94,11 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Optional — when unset, WalletConnect falls back to the geocast-dev
+      # placeholder which works for injected wallets but blackholes WC's
+      # analytics + remote-config endpoints (harmless 403/400 console noise).
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.5
@@ -102,6 +107,9 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 10m
+          # Pass the WalletConnect projectId through to the SSH session so
+          # the frontend build can bake it into the JS bundle.
+          envs: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
           script: |
             set -e
             APP_DIR=/www/wwwroot/geocast.kindrakevich.com
@@ -140,7 +148,9 @@ jobs:
             corepack enable
             corepack prepare pnpm@10.29.2 --activate
             pnpm install --frozen-lockfile
-            NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api pnpm --filter ./apps/web build
+            NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api \
+            NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
+              pnpm --filter ./apps/web build
 
             echo "=== Permissions ==="
             chown -R www:www apps/web/.next 2>/dev/null || true
