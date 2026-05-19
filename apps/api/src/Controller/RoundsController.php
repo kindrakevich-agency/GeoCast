@@ -28,7 +28,9 @@ final class RoundsController
     {
         $round = $this->rounds->findOpen();
         if ($round === null) {
-            return new JsonResponse(null);
+            // JsonResponse(null) emits "{}" — we want literal "null" so the
+            // frontend can do `if (round === null)` instead of an object check.
+            return JsonResponse::fromJsonString('null');
         }
 
         return new JsonResponse($this->serialize($round));
