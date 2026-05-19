@@ -13,7 +13,7 @@ import {
   AUTH_CLEARED_EVENT,
   apiFetch,
   clearToken,
-  getStoredToken,
+  getValidToken,
   storeToken,
 } from "@/lib/api/client";
 
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(cached);
       return;
     }
-    if (!getStoredToken()) return;
+    if (!getValidToken()) return;
 
     let cancelled = false;
     (async () => {

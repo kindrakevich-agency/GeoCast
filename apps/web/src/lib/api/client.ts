@@ -21,6 +21,45 @@ export function getStoredToken(): string | null {
   return window.localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
+/**
+ * Decode a JWT's `exp` claim without verifying the signature (cheap,
+ * client-side sanity check). Returns true if the token has expired by
+ * wall-clock time. Returns false if exp is missing/unparseable — let the
+ * server be the authority in that case.
+ *
+ * 30-second skew tolerance avoids edge-case 401s when the client clock
+ * lags the server by a few seconds right at expiry.
+ */
+function isTokenExpired(token: string): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: number };
+    if (typeof payload.exp !== "number") return false;
+    return Date.now() / 1000 > payload.exp + 30;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Like getStoredToken but pre-emptively clears + returns null for an
+ * already-expired JWT. Saves us a guaranteed 401 round-trip when the
+ * client knows the token can't possibly work.
+ */
+export function getValidToken(): string | null {
+  const t = getStoredToken();
+  if (!t) return null;
+  if (isTokenExpired(t)) {
+    clearToken();
+    broadcastAuthCleared();
+    return null;
+  }
+  return t;
+}
+
 export function storeToken(token: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
@@ -58,7 +97,10 @@ export async function apiFetch<T = unknown>(
   opts: ApiFetchOptions = {},
 ): Promise<T> {
   const url = path.startsWith("http") ? path : `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
-  const token = opts.anonymous ? null : getStoredToken();
+  // getValidToken() peeks the exp claim and pre-clears stale tokens, so a
+  // browser that's been idle past expiry doesn't burn a guaranteed 401 on
+  // every request before the auto-clear can react.
+  const token = opts.anonymous ? null : getValidToken();
 
   const headers = new Headers(opts.headers);
   headers.set("Accept", "application/json");

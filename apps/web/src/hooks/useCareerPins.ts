@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, apiFetch, getStoredToken } from "@/lib/api/client";
+import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
 import type { ApiCareerPin } from "@/lib/api/types";
 
 export type UseCareerPinsResult = {
@@ -21,7 +21,7 @@ export function useCareerPins(): UseCareerPinsResult {
   const [error, setError] = useState<ApiError | Error | null>(null);
 
   useEffect(() => {
-    if (!getStoredToken()) return;
+    if (!getValidToken()) return;
     setIsLoading(true);
     const ctrl = new AbortController();
     let cancelled = false;

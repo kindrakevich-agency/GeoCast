@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, apiFetch, getStoredToken } from "@/lib/api/client";
+import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
 import type { ApiUser } from "@/lib/api/types";
 
 export type UseMeResult = {
@@ -24,7 +24,7 @@ export function useMe(): UseMeResult {
   const [error, setError] = useState<ApiError | Error | null>(null);
 
   useEffect(() => {
-    const token = getStoredToken();
+    const token = getValidToken();
     if (!token) {
       setIsAuthed(false);
       setIsLoading(false);
