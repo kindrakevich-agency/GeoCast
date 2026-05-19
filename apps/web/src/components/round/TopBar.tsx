@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 
 export type TopBarProps = {
@@ -7,25 +9,42 @@ export type TopBarProps = {
   balance: number;
 };
 
+const NAV = [
+  { href: "/rounds/demo", label: "Game", match: (p: string) => p.startsWith("/rounds") },
+  { href: "/leaderboard", label: "Leaderboard", match: (p: string) => p === "/leaderboard" },
+  { href: "/me", label: "Profile", match: (p: string) => p === "/me" },
+];
+
 export function TopBar({ wallet, balance }: TopBarProps) {
+  const pathname = usePathname() ?? "/";
+
   return (
     <GlassPanel
       variant="strong"
       className="pointer-events-auto absolute left-1/2 top-4 z-40 flex w-[min(960px,calc(100%-2rem))] -translate-x-1/2 items-center justify-between gap-6 rounded-full px-5 py-2.5"
     >
-      <div className="flex items-center gap-2.5">
+      <Link href="/" className="flex items-center gap-2.5">
         <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-[var(--color-cyan)] to-[var(--color-magenta)] text-[10px] font-bold text-[var(--color-bg)]">
           GC
         </div>
         <span className="font-[family-name:var(--font-space-grotesk)] text-sm font-semibold tracking-wide">
           GeoCast
         </span>
-      </div>
+      </Link>
 
-      <nav className="hidden gap-6 text-xs uppercase tracking-[0.18em] text-[var(--color-text-muted)] md:flex">
-        <a className="text-white" href="#">Game</a>
-        <a className="hover:text-white" href="#">Leaderboard</a>
-        <a className="hover:text-white" href="#">Profile</a>
+      <nav className="hidden gap-6 text-xs uppercase tracking-[0.18em] md:flex">
+        {NAV.map((item) => {
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={active ? "text-white" : "text-[var(--color-text-muted)] hover:text-white"}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="flex items-center gap-3">
