@@ -31,6 +31,18 @@ export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
+/**
+ * Custom event fired when a stale token is auto-cleared on 401. The
+ * AuthProvider listens for this and resets user → null + isAuthed → false,
+ * so the UI re-renders as anonymous without a full page reload.
+ */
+export const AUTH_CLEARED_EVENT = "geocast:auth-cleared";
+
+function broadcastAuthCleared(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_CLEARED_EVENT));
+}
+
 export type ApiFetchOptions = Omit<RequestInit, "body" | "headers"> & {
   body?: unknown;          // pre-stringified or any value (will be JSON.stringified)
   headers?: HeadersInit;
@@ -80,6 +92,15 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!response.ok) {
+    // Auto-clear a stale token on 401. Lexik's JWT firewall rejects expired
+    // tokens before access_control runs, so even read-only public endpoints
+    // (e.g. /leaderboard) return 401 when a stale Bearer is attached. The
+    // user shouldn't have to hard-refresh to escape that state — clearing
+    // the token here puts subsequent requests back into anonymous mode.
+    if (response.status === 401 && token) {
+      clearToken();
+      broadcastAuthCleared();
+    }
     throw new ApiError(response.status, url, parsed, `${response.status} ${response.statusText} on ${path}`);
   }
 

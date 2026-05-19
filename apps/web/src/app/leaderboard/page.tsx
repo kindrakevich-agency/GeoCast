@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LeaderboardMap } from "@/components/leaderboard/LeaderboardMap";
+import { useAuth } from "@/hooks/useAuth";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
 import type { ApiLeaderboardRow } from "@/lib/api/types";
@@ -24,8 +25,14 @@ const TABS: Array<{ id: LeaderboardPeriod; label: string }> = [
 /**
  * API rows lack handle / country / avgDistanceKm / recentPins. Map them
  * onto the existing display shape so the same row component renders both.
+ *
+ * `isMe` is computed client-side by comparing the row's wallet to the local
+ * user's wallet — the leaderboard endpoint is on the public firewall now
+ * (so stale tokens can't 401 it), which means the server doesn't see the
+ * JWT and can't flag the caller's row server-side.
  */
-function apiToDisplay(r: ApiLeaderboardRow): LeaderboardRow {
+function apiToDisplay(r: ApiLeaderboardRow, myWallet: string | null): LeaderboardRow {
+  const isMe = myWallet !== null && r.wallet.toLowerCase() === myWallet.toLowerCase();
   return {
     rank: r.rank,
     wallet: r.wallet,
@@ -33,7 +40,7 @@ function apiToDisplay(r: ApiLeaderboardRow): LeaderboardRow {
     gamesPlayed: r.gamesPlayed,
     totalCredits: r.totalCredits,
     totalScore: r.totalScore,
-    isMe: r.isMe,
+    isMe,
   };
 }
 
@@ -41,6 +48,7 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState<LeaderboardPeriod>("all");
   const [hover, setHover] = useState<LeaderboardRow | null>(null);
 
+  const { user } = useAuth();
   const api = useLeaderboard(period);
 
   // Subscribe to the `leaderboard` channel — server broadcasts
@@ -54,9 +62,10 @@ export default function LeaderboardPage() {
   // Strategy: if the API has rows for this period, show them. Otherwise
   // fall back to the rich mock so the page never looks empty pre-launch.
   const usingApi = api.rows.length > 0;
+  const myWallet = user?.walletAddress ?? null;
   const rows: LeaderboardRow[] = useMemo(
-    () => (usingApi ? api.rows.map(apiToDisplay) : leaderboardData[period]),
-    [usingApi, api.rows, period],
+    () => (usingApi ? api.rows.map((r) => apiToDisplay(r, myWallet)) : leaderboardData[period]),
+    [usingApi, api.rows, period, myWallet],
   );
 
   const me = useMemo(() => rows.find((r) => r.isMe) ?? null, [rows]);
@@ -67,7 +76,7 @@ export default function LeaderboardPage() {
       <LeaderboardMap hoverPins={hover?.recentPins ?? null} />
 
       <Link
-        href="/rounds/demo"
+        href="/play"
         className="pointer-events-auto absolute left-6 top-6 z-30 rounded-full border border-[var(--color-border)] bg-black/40 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md transition-colors hover:border-[var(--color-cyan)] hover:text-white"
       >
         ← Active round

@@ -13,14 +13,18 @@ security:
             security: false
 
         # Public sub-firewall — no auth required, no Lexik intervention.
-        # Covers nonce/verify (the JWT issuance flow), health, and the
-        # read-only single-round endpoint.
+        # Covers nonce/verify (the JWT issuance flow), health, the
+        # read-only single-round endpoint, and the leaderboard.
         #
-        # Note: /leaderboard is INTENTIONALLY not here. It's still public
-        # via access_control, but goes through the `api` firewall so a
-        # JWT (when sent) gets parsed and the controller can flag isMe.
+        # Why /leaderboard moved here: Lexik's JWT firewall rejects stale
+        # tokens with 401 before access_control runs, breaking read-only
+        # public access for any client that still has an expired Bearer in
+        # localStorage. Routing /leaderboard through the public firewall
+        # avoids that. The frontend now computes `isMe` client-side by
+        # comparing the local user.walletAddress to row.wallet, so the
+        # "your rank" highlight survives without the server seeing the JWT.
         api_public:
-            pattern: ^/(auth|health|rounds$|rounds/[^/]+$)
+            pattern: ^/(auth|health|rounds$|rounds/[^/]+$|leaderboard)
             stateless: true
             security: false
 

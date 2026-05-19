@@ -9,8 +9,8 @@ import { CareerHeatmap } from "@/components/profile/CareerHeatmap";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { RecentRoundCard } from "@/components/profile/RecentRoundCard";
 import { StatCard } from "@/components/profile/StatCard";
+import { useAuth } from "@/hooks/useAuth";
 import { useCareerPins } from "@/hooks/useCareerPins";
-import { useMe } from "@/hooks/useMe";
 import { useMyPredictions } from "@/hooks/useMyPredictions";
 import {
   careerPins as mockCareerPins,
@@ -33,7 +33,10 @@ import { shortWallet } from "@/lib/mock";
  * "Recent rounds · 8 (demo)" complaint.
  */
 export default function ProfilePage() {
-  const { user, isAuthed } = useMe();
+  // useAuth (not useMe) so the AuthContext's AUTH_CLEARED_EVENT listener
+  // can flip this page from authed-empty back to anonymous on stale-JWT
+  // 401s — useMe's local state would otherwise stay stuck on isAuthed=true.
+  const { user, isAuthed } = useAuth();
   const { pins: livePins } = useCareerPins();
   const { data: history } = useMyPredictions(10);
 

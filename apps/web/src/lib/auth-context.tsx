@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useAccount, useDisconnect, useSignMessage } from "wagmi";
 import {
+  AUTH_CLEARED_EVENT,
   apiFetch,
   clearToken,
   getStoredToken,
@@ -143,6 +144,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // When apiFetch auto-clears a stale token on 401, snap our own state to
+  // "anonymous" so consumers re-render against the right view. Wallet stays
+  // connected — the user can hit Connect to re-sign-in without re-connecting.
+  useEffect(() => {
+    const onCleared = () => {
+      clearSessionUser();
+      setUser(null);
+      setError(new Error("Session expired — please sign in again."));
+    };
+    window.addEventListener(AUTH_CLEARED_EVENT, onCleared);
+    return () => window.removeEventListener(AUTH_CLEARED_EVENT, onCleared);
   }, []);
 
   const signIn = useCallback(async () => {
