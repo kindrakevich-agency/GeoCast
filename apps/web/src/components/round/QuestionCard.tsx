@@ -9,6 +9,7 @@ export type QuestionCardProps = {
   closesAt: string;
   participants: number;
   pool: number;
+  roundNumber: number;
 };
 
 export function QuestionCard({
@@ -16,9 +17,10 @@ export function QuestionCard({
   closesAt,
   participants,
   pool,
+  roundNumber,
 }: QuestionCardProps) {
-  const countdown = useCountdown(closesAt);
-  const urgent = countdown.total > 0 && countdown.total < 5 * 60_000;
+  const { countdown, ready } = useCountdown(closesAt);
+  const urgent = ready && countdown.total > 0 && countdown.total < 5 * 60_000;
 
   return (
     <motion.div
@@ -39,7 +41,7 @@ export function QuestionCard({
             />
             Round live
           </span>
-          <span>#{Math.floor(Math.random() * 900 + 100)}</span>
+          <span>#{roundNumber}</span>
         </div>
 
         <h1 className="mb-4 font-[family-name:var(--font-space-grotesk)] text-[clamp(1.4rem,2.4vw,2rem)] font-semibold leading-tight">
@@ -52,14 +54,15 @@ export function QuestionCard({
               Closes in
             </p>
             <p
-              className={`font-[family-name:var(--font-jetbrains-mono)] text-[clamp(1.6rem,3vw,2.4rem)] font-semibold leading-none ${
+              className={`font-[family-name:var(--font-jetbrains-mono)] text-[clamp(1.6rem,3vw,2.4rem)] font-semibold leading-none tabular-nums ${
                 urgent ? "animate-pulse-soft" : ""
               }`}
               style={{
                 color: urgent ? "var(--color-amber)" : "var(--color-text)",
               }}
+              suppressHydrationWarning
             >
-              {formatCountdown(countdown)}
+              {ready ? formatCountdown(countdown) : "—:—"}
             </p>
           </div>
 

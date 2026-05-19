@@ -41,6 +41,7 @@ export default function ActiveRoundPage() {
         closesAt={demoRound.closesAt}
         participants={demoRound.totalParticipants}
         pool={demoRound.poolCredits}
+        roundNumber={demoRound.number}
       />
 
       <SidePanel

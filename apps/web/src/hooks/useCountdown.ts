@@ -20,16 +20,22 @@ const compute = (targetMs: number): Countdown => {
   return { total, days, hours, minutes, seconds, expired: total === 0 };
 };
 
-export function useCountdown(targetIso: string): Countdown {
+const ZERO: Countdown = { total: 0, days: 0, hours: 0, minutes: 0, seconds: 0, expired: false };
+
+export function useCountdown(targetIso: string): { countdown: Countdown; ready: boolean } {
   const targetMs = new Date(targetIso).getTime();
-  const [state, setState] = useState<Countdown>(() => compute(targetMs));
+  // Deterministic initial state (no Date.now during SSR) — then sync on mount.
+  const [state, setState] = useState<Countdown>(ZERO);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    setState(compute(targetMs));
+    setReady(true);
     const id = window.setInterval(() => setState(compute(targetMs)), 1000);
     return () => window.clearInterval(id);
   }, [targetMs]);
 
-  return state;
+  return { countdown: state, ready };
 }
 
 export const pad = (n: number) => String(n).padStart(2, "0");

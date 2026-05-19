@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Map, {
+  AttributionControl,
   Layer,
   Marker,
   Source,
@@ -86,7 +87,7 @@ export function MapStage({
           bearing: 0,
           pitch: 0,
         }}
-        attributionControl={{ compact: true }}
+        attributionControl={false}
         onClick={handleClick}
         onMouseMove={handleMove}
         onMouseOut={() => setCursor(null)}
@@ -94,6 +95,7 @@ export function MapStage({
         touchPitch={false}
         cursor={placed ? "grab" : "crosshair"}
       >
+        <AttributionControl compact position="bottom-right" />
         {placed && (
           <Source id="heatmap" type="geojson" data={heatmapData}>
             <Layer

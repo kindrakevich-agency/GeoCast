@@ -16,6 +16,7 @@ export type MockPresence = {
 
 export type MockRound = {
   id: string;
+  number: number;
   question: string;
   description: string;
   opensAt: string;
@@ -31,6 +32,7 @@ const isoIn = (minutes: number) =>
 
 export const demoRound: MockRound = {
   id: "demo",
+  number: 482,
   question: "Where will today's largest wildfire start?",
   description:
     "Largest wildfire by area burned in the next 24 hours, per NASA FIRMS daily summary.",
