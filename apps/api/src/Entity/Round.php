@@ -19,6 +19,13 @@ class Round
     #[ORM\Column(type: UlidType::NAME, unique: true)]
     private Ulid $id;
 
+    /**
+     * Sequential round number for display (#482 style). Set by the round-create
+     * service from `MAX(number) + 1` — uniqueness enforced at the DB level.
+     */
+    #[ORM\Column(type: 'integer', unique: true)]
+    private int $number;
+
     #[ORM\Column(length: 280)]
     private string $question;
 
@@ -55,9 +62,10 @@ class Round
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $resolvedAt = null;
 
-    public function __construct(string $question, \DateTimeImmutable $opensAt, \DateTimeImmutable $closesAt)
+    public function __construct(int $number, string $question, \DateTimeImmutable $opensAt, \DateTimeImmutable $closesAt)
     {
         $this->id = new Ulid();
+        $this->number = $number;
         $this->question = $question;
         $this->opensAt = $opensAt;
         $this->closesAt = $closesAt;
@@ -65,6 +73,7 @@ class Round
     }
 
     public function getId(): Ulid { return $this->id; }
+    public function getNumber(): int { return $this->number; }
     public function getQuestion(): string { return $this->question; }
     public function getDescription(): ?string { return $this->description; }
     public function setDescription(?string $description): self { $this->description = $description; return $this; }
