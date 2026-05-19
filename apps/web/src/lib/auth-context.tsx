@@ -9,13 +9,46 @@ import {
   useState,
 } from "react";
 import { useAccount, useDisconnect, useSignMessage } from "wagmi";
-import { SiweMessage } from "siwe";
 import {
   apiFetch,
   clearToken,
   getStoredToken,
   storeToken,
 } from "@/lib/api/client";
+
+/**
+ * Build a canonical EIP-4361 (SIWE) message string. We compose it by hand
+ * rather than going through the `siwe` library — siwe v3 broke its
+ * builder API (constructor now expects a string to parse, not an object
+ * to construct from), and we have a strict server-side parser in PHP
+ * that wants this exact wire shape.
+ *
+ * Format matches the regexes in apps/api/src/Service/Siwe/SiweMessageParser.php.
+ */
+function buildSiweMessage(opts: {
+  domain: string;
+  address: string;
+  statement: string;
+  uri: string;
+  version: string;
+  chainId: number;
+  nonce: string;
+  issuedAt?: string;
+}): string {
+  const issued = opts.issuedAt ?? new Date().toISOString();
+  return [
+    `${opts.domain} wants you to sign in with your Ethereum account:`,
+    opts.address,
+    "",
+    opts.statement,
+    "",
+    `URI: ${opts.uri}`,
+    `Version: ${opts.version}`,
+    `Chain ID: ${opts.chainId}`,
+    `Nonce: ${opts.nonce}`,
+    `Issued At: ${issued}`,
+  ].join("\n");
+}
 import type {
   ApiNonceResponse,
   ApiUser,
@@ -116,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         anonymous: true,
       });
 
-      const message = new SiweMessage({
+      const message = buildSiweMessage({
         domain: window.location.host,
         address,
         statement: "Sign in to GeoCast — daily geo-prediction game.",
@@ -124,8 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         version: "1",
         chainId: chainId ?? 1,
         nonce,
-        issuedAt: new Date().toISOString(),
-      }).prepareMessage();
+      });
 
       const signature = await signMessageAsync({ message });
 
