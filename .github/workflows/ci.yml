@@ -59,7 +59,7 @@ jobs:
         working-directory: apps/api
         run: composer validate --strict --no-check-publish
       - name: Cache vendor/
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: apps/api/vendor
           key: composer-${{ hashFiles('apps/api/composer.lock', 'apps/api/composer.json') }}
@@ -101,7 +101,6 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
           command_timeout: 10m
           script: |
             set -e

@@ -63,7 +63,10 @@ final class Version20260519000001CreateBaseSchema extends AbstractMigration
 
         // -------- predictions --------
         // `rank` is a reserved word in MariaDB 10.2+ window-function syntax — backticked.
-        // `coords` is a STORED generated column from lat/lng → POINT(SRID 4326), then SPATIAL-indexed.
+        // Coordinates are stored as separate FLOAT columns. ST_Distance_Sphere
+        // can compute distance directly from POINT(lng, lat) at query time, so
+        // a stored POINT column / SPATIAL index aren't needed for the scoring
+        // formula. Can be added in a later migration if proximity queries land.
         $this->addSql(<<<'SQL'
             CREATE TABLE predictions (
                 id BINARY(16) NOT NULL,
@@ -71,7 +74,6 @@ final class Version20260519000001CreateBaseSchema extends AbstractMigration
                 round_id BINARY(16) NOT NULL,
                 lat DOUBLE PRECISION NOT NULL,
                 lng DOUBLE PRECISION NOT NULL,
-                coords POINT GENERATED ALWAYS AS (ST_SRID(POINT(lng, lat), 4326)) STORED NOT NULL,
                 credits_staked INT NOT NULL DEFAULT 1,
                 distance_km DOUBLE PRECISION NULL,
                 `rank` INT NULL,
@@ -79,7 +81,6 @@ final class Version20260519000001CreateBaseSchema extends AbstractMigration
                 placed_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
                 UNIQUE INDEX uniq_predictions_user_round (user_id, round_id),
                 INDEX idx_predictions_round_distance (round_id, distance_km),
-                SPATIAL INDEX idx_predictions_coords (coords),
                 PRIMARY KEY(id)
             ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB
         SQL);
