@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { BottomHint } from "@/components/round/BottomHint";
 import { ClaimBar } from "@/components/round/ClaimBar";
@@ -34,6 +35,19 @@ import { rank, withUserPin } from "@/lib/scoring";
 export default function ActiveRoundPage() {
   const { round: liveRound, isLoading } = useCurrentRound();
   const { isAuthed, updateUser } = useAuth();
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+
+  // The page ignores the URL slug and always renders /api/rounds/current.
+  // To keep the URL honest (so shares + deep links reflect the real round),
+  // rewrite the URL once we know the actual ULID. /play redirects here, so
+  // this is the canonicalization step for the "Game" nav link too.
+  useEffect(() => {
+    if (!liveRound) return;
+    if (params?.id !== liveRound.id) {
+      router.replace(`/rounds/${liveRound.id}`);
+    }
+  }, [liveRound, params?.id, router]);
 
   const [pending, setPending] = useState<LngLat | null>(null);
   const [myPin, setMyPin] = useState<LngLat | null>(null);

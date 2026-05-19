@@ -14,7 +14,9 @@ export type TopBarProps = {
 };
 
 const NAV = [
-  { href: "/rounds/demo", label: "Game", match: (p: string) => p.startsWith("/rounds") },
+  // /play is a server-side redirect to /rounds/{currentRoundId} — keeps the
+  // nav URL stable while the visible URL always reflects the real round.
+  { href: "/play", label: "Game", match: (p: string) => p.startsWith("/rounds") || p === "/play" },
   { href: "/leaderboard", label: "Leaderboard", match: (p: string) => p === "/leaderboard" },
   { href: "/me", label: "Profile", match: (p: string) => p === "/me" },
 ];

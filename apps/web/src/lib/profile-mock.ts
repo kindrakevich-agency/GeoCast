@@ -20,12 +20,14 @@ export type PastRound = {
   number: number;
   question: string;
   date: string;          // YYYY-MM-DD
-  answerLabel: string;   // human-readable answer location
   myPin: LngLat;
-  answer: LngLat;
-  distanceKm: number;
-  rank: number;
   totalPlayers: number;
+  /** Null on rounds that haven't been resolved yet — caller renders an
+   *  "in progress" pill instead of distance / rank / earned. */
+  answerLabel: string | null;
+  answer: LngLat | null;
+  distanceKm: number | null;
+  rank: number | null;
   payout: number;
 };
 

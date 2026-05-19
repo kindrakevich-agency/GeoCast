@@ -5,14 +5,16 @@ import { motion } from "framer-motion";
 import type { PastRound } from "@/lib/profile-mock";
 
 export function RecentRoundCard({ round, index }: { round: PastRound; index: number }) {
-  const top10 = round.rank <= 10;
-  const top3 = round.rank <= 3;
-  const formattedDistance =
-    round.distanceKm < 10
-      ? round.distanceKm.toFixed(2)
-      : round.distanceKm < 100
-      ? round.distanceKm.toFixed(1)
-      : Math.round(round.distanceKm).toString();
+  const isResolved = round.rank !== null && round.distanceKm !== null;
+  const top10 = isResolved && (round.rank as number) <= 10;
+  const top3 = isResolved && (round.rank as number) <= 3;
+  const formattedDistance = isResolved
+    ? (round.distanceKm as number) < 10
+      ? (round.distanceKm as number).toFixed(2)
+      : (round.distanceKm as number) < 100
+      ? (round.distanceKm as number).toFixed(1)
+      : Math.round(round.distanceKm as number).toString()
+    : null;
 
   return (
     <motion.li
@@ -36,34 +38,59 @@ export function RecentRoundCard({ round, index }: { round: PastRound; index: num
           <div className="min-w-0 flex-1">
             <p className="mb-1 truncate text-sm">{round.question}</p>
             <p className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)]">
-              {round.date} · answer: <span className="text-[var(--color-text)]">{round.answerLabel}</span>
+              {round.date} ·{" "}
+              {isResolved && round.answerLabel ? (
+                <>answer: <span className="text-[var(--color-text)]">{round.answerLabel}</span></>
+              ) : (
+                <span style={{ color: "var(--color-amber)" }}>round in progress</span>
+              )}
             </p>
           </div>
 
           <div className="flex shrink-0 items-baseline gap-4 text-right">
-            <Cell label="distance">
-              <span style={{ color: "var(--color-magenta)" }}>{formattedDistance}</span>
-              <span className="text-[10px] text-[var(--color-text-muted)]"> km</span>
-            </Cell>
-            <Cell label="rank">
-              <span
-                style={{
-                  color: top3
-                    ? "var(--color-green)"
-                    : top10
-                    ? "var(--color-cyan)"
-                    : "var(--color-text)",
-                }}
-              >
-                #{round.rank}
-              </span>
-              <span className="text-[10px] text-[var(--color-text-muted)]"> /{round.totalPlayers}</span>
-            </Cell>
-            <Cell label="earned">
-              <span style={{ color: round.payout > 0 ? "var(--color-green)" : "var(--color-text-muted)" }}>
-                +{round.payout}
-              </span>
-            </Cell>
+            {isResolved ? (
+              <>
+                <Cell label="distance">
+                  <span style={{ color: "var(--color-magenta)" }}>{formattedDistance}</span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]"> km</span>
+                </Cell>
+                <Cell label="rank">
+                  <span
+                    style={{
+                      color: top3
+                        ? "var(--color-green)"
+                        : top10
+                        ? "var(--color-cyan)"
+                        : "var(--color-text)",
+                    }}
+                  >
+                    #{round.rank}
+                  </span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]"> /{round.totalPlayers}</span>
+                </Cell>
+                <Cell label="earned">
+                  <span style={{ color: round.payout > 0 ? "var(--color-green)" : "var(--color-text-muted)" }}>
+                    +{round.payout}
+                  </span>
+                </Cell>
+              </>
+            ) : (
+              <Cell label="status">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]"
+                  style={{ color: "var(--color-amber)" }}
+                >
+                  <span
+                    className="inline-block h-1 w-1 animate-pulse rounded-full"
+                    style={{
+                      background: "var(--color-amber)",
+                      boxShadow: "0 0 6px var(--color-amber)",
+                    }}
+                  />
+                  awaiting reveal
+                </span>
+              </Cell>
+            )}
           </div>
         </div>
       </GlassPanel>

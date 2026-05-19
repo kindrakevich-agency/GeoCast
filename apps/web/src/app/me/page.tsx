@@ -12,58 +12,93 @@ import { StatCard } from "@/components/profile/StatCard";
 import { useCareerPins } from "@/hooks/useCareerPins";
 import { useMe } from "@/hooks/useMe";
 import { useMyPredictions } from "@/hooks/useMyPredictions";
-import type { ApiPredictionHistoryItem } from "@/lib/api/types";
-import { careerPins as mockCareerPins, myStats, recentRounds as mockRecentRounds, type PastRound } from "@/lib/profile-mock";
+import {
+  careerPins as mockCareerPins,
+  myStats,
+  recentRounds as mockRecentRounds,
+  type PastRound,
+} from "@/lib/profile-mock";
 import { shortWallet } from "@/lib/mock";
 
 /**
- * Profile page. When a JWT is in storage, /api/me supplies the headline
- * stats, /api/me/career-pins fills the heatmap, and /api/me/predictions
- * fills the recent-rounds timeline. Each section independently falls back
- * to the mock data so an empty-history user still sees a full page, and
- * an unauthenticated visitor gets the full demo.
+ * Profile page with three distinct states:
+ *   1. Anonymous            → full demo (mock heatmap, mock timeline)
+ *   2. Authed with history  → live heatmap + live timeline (mixed resolved
+ *                              and in-progress pins, no demo fallback)
+ *   3. Authed, empty        → empty-state CTAs pointing at the active round
+ *
+ * Stat-grid headline numbers come from /api/me. Avg distance + best result
+ * are derived from the live history (resolved rounds only) — never from
+ * mock numbers when authed, which was the source of the misleading
+ * "Recent rounds · 8 (demo)" complaint.
  */
 export default function ProfilePage() {
   const { user, isAuthed } = useMe();
   const { pins: livePins } = useCareerPins();
   const { data: history } = useMyPredictions(10);
 
+  // Mixed history: include in-progress pins (rank/distance null) so a user
+  // who's placed a pin on the active round sees themselves in the timeline.
+  const liveRecentRounds = useMemo<PastRound[]>(() => {
+    if (!history) return [];
+    return history.items.map((it) => ({
+      number: it.round.number,
+      question: it.round.question,
+      date: it.placedAt.slice(0, 10),
+      myPin: it.myPin,
+      totalPlayers: it.round.totalParticipants,
+      answerLabel: it.round.answer
+        ? `${it.round.answer.lat.toFixed(2)}, ${it.round.answer.lng.toFixed(2)}`
+        : null,
+      answer: it.round.answer,
+      distanceKm: it.distanceKm,
+      rank: it.rank,
+      payout: it.payout,
+    }));
+  }, [history]);
+
+  // Resolved-only slice for averages — in-progress rounds have no distance,
+  // so they can't contribute to "avg distance" or "best result".
+  const resolvedHistory = useMemo(
+    () => liveRecentRounds.filter((r) => r.distanceKm !== null && r.rank !== null),
+    [liveRecentRounds],
+  );
+
+  // Source-of-truth flags. Drives the three-state branching below.
+  const hasLivePins = livePins !== null && livePins.length > 0;
+  const hasLiveHistory = liveRecentRounds.length > 0;
+  const isAuthedEmpty = isAuthed && livePins !== null && livePins.length === 0
+                                 && history !== null && history.items.length === 0;
+
+  // Display data: live for authed-with-data, mock for everyone else.
+  const careerPins = hasLivePins ? livePins : mockCareerPins;
+  const recentRounds = hasLiveHistory ? liveRecentRounds : mockRecentRounds;
+
   const wallet = user?.walletAddress ?? myStats.wallet;
   const gamesPlayed = user?.gamesPlayed ?? myStats.gamesPlayed;
   const creditsBalance = user?.creditsBalance ?? myStats.totalCreditsEarned;
   const totalScore = user?.totalScore ?? myStats.totalScore;
 
-  const careerPins = livePins && livePins.length > 0 ? livePins : mockCareerPins;
-  const isCareerPinsLive = livePins !== null && livePins.length > 0;
+  // Derived stats: from real history when authed-with-data, mock otherwise.
+  const avgDistanceKm = isAuthed
+    ? resolvedHistory.length > 0
+      ? resolvedHistory.reduce((a, r) => a + (r.distanceKm as number), 0) / resolvedHistory.length
+      : null
+    : myStats.avgDistanceKm;
+  const bestDistanceKm = isAuthed
+    ? resolvedHistory.length > 0
+      ? Math.min(...resolvedHistory.map((r) => r.distanceKm as number))
+      : null
+    : myStats.bestDistanceKm;
+  const bestRank = isAuthed
+    ? resolvedHistory.length > 0
+      ? Math.min(...resolvedHistory.map((r) => r.rank as number))
+      : null
+    : myStats.bestRank;
 
-  // Convert API history to the PastRound shape the timeline card already
-  // renders. Only resolved rounds carry the fields the card needs.
-  const liveRecentRounds = useMemo<PastRound[]>(() => {
-    if (!history) return [];
-    return history.items
-      .filter((it): it is ApiPredictionHistoryItem & { distanceKm: number; rank: number; round: { answer: NonNullable<ApiPredictionHistoryItem["round"]["answer"]> } } =>
-        it.round.answer !== null && it.distanceKm !== null && it.rank !== null,
-      )
-      .map((it) => ({
-        number: it.round.number,
-        question: it.round.question,
-        date: it.placedAt.slice(0, 10),
-        answerLabel: `${it.round.answer.lat.toFixed(2)}, ${it.round.answer.lng.toFixed(2)}`,
-        myPin: it.myPin,
-        answer: it.round.answer,
-        distanceKm: it.distanceKm,
-        rank: it.rank,
-        totalPlayers: it.round.totalParticipants,
-        payout: it.payout,
-      }));
-  }, [history]);
-
-  const recentRounds = liveRecentRounds.length > 0 ? liveRecentRounds : mockRecentRounds;
-  const isHistoryLive = liveRecentRounds.length > 0;
-
-  const winRate = (
-    (recentRounds.filter((r) => r.rank <= 10).length / recentRounds.length) * 100
-  ).toFixed(0);
+  const winRate =
+    recentRounds.filter((r) => r.rank !== null && (r.rank as number) <= 10).length /
+    Math.max(1, recentRounds.length);
 
   return (
     <main className="relative min-h-screen w-screen overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] scanlines">
@@ -72,7 +107,7 @@ export default function ProfilePage() {
       </div>
 
       <Link
-        href="/rounds/demo"
+        href="/play"
         className="pointer-events-auto fixed right-6 top-6 z-30 rounded-full border border-[var(--color-border)] bg-black/40 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md transition-colors hover:border-[var(--color-cyan)] hover:text-white"
       >
         Active round →
@@ -132,23 +167,29 @@ export default function ProfilePage() {
           <StatCard label="Games played" value={gamesPlayed} />
           <StatCard
             label="Avg distance"
-            value={myStats.avgDistanceKm.toFixed(0)}
-            unit="km"
+            value={avgDistanceKm !== null ? avgDistanceKm.toFixed(0) : "—"}
+            unit={avgDistanceKm !== null ? "km" : undefined}
             accent="magenta"
-            hint={isAuthed ? "demo data" : undefined}
+            hint={isAuthed && avgDistanceKm === null ? "no resolved rounds yet" : undefined}
           />
           <StatCard
             label="Best result"
-            value={myStats.bestDistanceKm.toFixed(1)}
-            unit="km"
+            value={bestDistanceKm !== null ? bestDistanceKm.toFixed(1) : "—"}
+            unit={bestDistanceKm !== null ? "km" : undefined}
             accent="green"
-            hint={isAuthed ? "demo data" : `#${myStats.bestRank} place`}
+            hint={
+              isAuthed
+                ? bestRank !== null
+                  ? `#${bestRank} place`
+                  : "no resolved rounds yet"
+                : `#${myStats.bestRank} place`
+            }
           />
           <StatCard
             label={isAuthed ? "Credits" : "Credits earned"}
             value={creditsBalance.toLocaleString()}
             accent="cyan"
-            hint={isAuthed ? "live balance" : `top-10 rate ${winRate}%`}
+            hint={isAuthed ? "live balance" : `top-10 rate ${(winRate * 100).toFixed(0)}%`}
           />
         </motion.div>
 
@@ -158,7 +199,15 @@ export default function ProfilePage() {
           transition={{ delay: 0.18, duration: 0.3 }}
           className="mt-8"
         >
-          <CareerHeatmap pins={careerPins} />
+          {hasLivePins || !isAuthed ? (
+            <CareerHeatmap pins={careerPins} />
+          ) : (
+            <EmptyState
+              title="Your career heatmap starts here"
+              body="Every pin you drop lands on this map for life. Drop your first one and the heatmap begins."
+              cta="Drop a pin →"
+            />
+          )}
         </motion.section>
 
         <motion.section
@@ -168,25 +217,75 @@ export default function ProfilePage() {
           className="mt-8"
         >
           <h2 className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-            Recent rounds · {recentRounds.length}
-            {isHistoryLive ? null : (
+            Recent rounds · {hasLiveHistory ? liveRecentRounds.length : mockRecentRounds.length}
+            {hasLiveHistory || !isAuthed ? null : null}
+            {!hasLiveHistory && !isAuthed && (
               <span className="ml-2 text-[var(--color-text-muted)] opacity-60">(demo)</span>
             )}
           </h2>
-          <ul className="space-y-2">
-            {recentRounds.map((r, i) => (
-              <RecentRoundCard key={r.number} round={r} index={i} />
-            ))}
-          </ul>
+          {hasLiveHistory || !isAuthed ? (
+            <ul className="space-y-2">
+              {recentRounds.map((r, i) => (
+                <RecentRoundCard key={r.number} round={r} index={i} />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              title="You haven't played a round yet"
+              body="One pin, one round, one shot at the truth. Your timeline fills in as soon as you place your first pin."
+              cta="Go to the active round →"
+              compact
+            />
+          )}
         </motion.section>
 
         <p className="mt-10 text-center text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-          {isAuthed
-            ? `live profile · ${user?.walletAddress ? shortWallet(user.walletAddress) : ""}${isCareerPinsLive ? "" : " · heatmap demo"}`
-            : `${myStats.pinsPerWeek} pins/week · total score ${myStats.totalScore.toFixed(2)} · (demo data)`}
+          {isAuthed ? (
+            isAuthedEmpty ? (
+              <>welcome · sign your first pin to populate this page</>
+            ) : (
+              <>live profile · {user?.walletAddress ? shortWallet(user.walletAddress) : ""}</>
+            )
+          ) : (
+            <>
+              {myStats.pinsPerWeek} pins/week · total score {myStats.totalScore.toFixed(2)} ·
+              (demo data)
+            </>
+          )}
         </p>
       </div>
     </main>
+  );
+}
+
+function EmptyState({
+  title,
+  body,
+  cta,
+  compact = false,
+}: {
+  title: string;
+  body: string;
+  cta: string;
+  compact?: boolean;
+}) {
+  return (
+    <GlassPanel
+      className={`flex flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-dashed text-center ${
+        compact ? "px-6 py-8" : "px-6 py-16"
+      }`}
+    >
+      <p className="font-[family-name:var(--font-space-grotesk)] text-lg font-semibold">
+        {title}
+      </p>
+      <p className="max-w-md text-sm text-[var(--color-text-muted)]">{body}</p>
+      <Link
+        href="/play"
+        className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--color-cyan)] px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.22em] text-[var(--color-cyan)] transition-colors hover:bg-[var(--color-cyan)] hover:text-[var(--color-bg)]"
+      >
+        {cta}
+      </Link>
+    </GlassPanel>
   );
 }
 
