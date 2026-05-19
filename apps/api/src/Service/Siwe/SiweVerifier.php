@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service\Siwe;
 
+use Elliptic\EC;
 use kornrunner\Keccak;
-use kornrunner\Secp256k1;
-use kornrunner\Signature\Signature;
 
 /**
  * Verifies an EIP-4361 (SIWE) signed message + signature pair.
@@ -85,10 +84,19 @@ final class SiweVerifier
     /**
      * Recover the 0x-prefixed Ethereum address that produced `signature`
      * over an Ethereum-signed `message`.
+     *
+     * Uses simplito/elliptic-php (pure-PHP port of the JS `elliptic` lib)
+     * for the secp256k1 recovery. kornrunner/secp256k1 v0.4 dropped its
+     * public recoverPublicKey() method, hence the swap.
      */
     private function recoverAddress(string $message, string $signature): string
     {
-        $sig = ltrim($signature, '0x');
+        // Strip a leading "0x" only — not arbitrary "0" and "x" characters
+        // (ltrim mask was a foot-gun, fixed by using substr).
+        $sig = $signature;
+        if (str_starts_with($sig, '0x') || str_starts_with($sig, '0X')) {
+            $sig = substr($sig, 2);
+        }
         if (\strlen($sig) !== 130) {
             throw new SiweVerificationException('Signature must be 65 bytes (130 hex chars + optional 0x prefix).');
         }
@@ -105,14 +113,24 @@ final class SiweVerifier
         $prefix = "\x19Ethereum Signed Message:\n".\strlen($message);
         $hashHex = Keccak::hash($prefix.$message, 256);
 
-        $secp = new Secp256k1();
-        $publicKeyHex = $secp->recoverPublicKey($hashHex, new Signature($r, $s), $recoveryId);
+        try {
+            $ec = new EC('secp256k1');
+            $publicKey = $ec->recoverPubKey($hashHex, ['r' => $r, 's' => $s], $recoveryId);
+            // Uncompressed encoding: 04 || x(32) || y(32) = 130 hex chars (65 bytes)
+            $pubKeyHex = $publicKey->encode('hex', false);
+        } catch (\Throwable $e) {
+            throw new SiweVerificationException('secp256k1 recovery failed: '.$e->getMessage(), previous: $e);
+        }
 
-        // Strip leading 0x04 (uncompressed point marker), keccak256(64 bytes)[12:] is the address
-        $pubKeyBytes = hex2bin(ltrim($publicKeyHex, '04'));
+        // Strip the leading 0x04 (uncompressed marker) — first 2 hex chars.
+        if (\strlen($pubKeyHex) < 130 || substr($pubKeyHex, 0, 2) !== '04') {
+            throw new SiweVerificationException('Unexpected public-key encoding.');
+        }
+        $pubKeyBytes = hex2bin(substr($pubKeyHex, 2));
         if ($pubKeyBytes === false || \strlen($pubKeyBytes) !== 64) {
             throw new SiweVerificationException('Could not derive public key bytes from signature.');
         }
+        // Ethereum address = last 20 bytes of keccak256(pubkey x||y).
         $addressHex = substr(Keccak::hash($pubKeyBytes, 256), 24);
 
         return '0x'.strtolower($addressHex);

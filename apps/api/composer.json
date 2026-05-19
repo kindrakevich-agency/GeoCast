@@ -17,6 +17,7 @@
     "nelmio/cors-bundle": "^2.5",
     "predis/predis": "^2.4",
     "pusher/pusher-php-server": "^7.2",
+    "simplito/elliptic-php": "^1.0",
     "symfony/console": "^7.2",
     "symfony/dotenv": "^7.2",
     "symfony/flex": "^2.4",
