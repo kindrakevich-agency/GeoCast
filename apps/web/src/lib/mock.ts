@@ -41,6 +41,7 @@ export const demoRound: MockRound = {
   poolCredits: 247,
   totalParticipants: 247,
   status: "open",
+  answer: { lng: -9.14, lat: 38.72 }, // Lisbon — revealed on resolution
 };
 
 const PIN_SEED: Array<Omit<MockPlayer, "id">> = [

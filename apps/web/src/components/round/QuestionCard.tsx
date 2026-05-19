@@ -10,6 +10,7 @@ export type QuestionCardProps = {
   participants: number;
   pool: number;
   roundNumber: number;
+  status?: "open" | "resolved";
 };
 
 export function QuestionCard({
@@ -18,9 +19,11 @@ export function QuestionCard({
   participants,
   pool,
   roundNumber,
+  status = "open",
 }: QuestionCardProps) {
   const { countdown, ready } = useCountdown(closesAt);
-  const urgent = ready && countdown.total > 0 && countdown.total < 5 * 60_000;
+  const urgent = status === "open" && ready && countdown.total > 0 && countdown.total < 5 * 60_000;
+  const resolved = status === "resolved";
 
   return (
     <motion.div
@@ -35,11 +38,13 @@ export function QuestionCard({
             <span
               className="inline-block h-1.5 w-1.5 rounded-full"
               style={{
-                background: "var(--color-cyan)",
-                boxShadow: "0 0 10px var(--color-cyan)",
+                background: resolved ? "var(--color-magenta)" : "var(--color-cyan)",
+                boxShadow: resolved
+                  ? "0 0 10px var(--color-magenta)"
+                  : "0 0 10px var(--color-cyan)",
               }}
             />
-            Round live
+            {resolved ? "Resolved" : "Round live"}
           </span>
           <span>#{roundNumber}</span>
         </div>
@@ -49,22 +54,36 @@ export function QuestionCard({
         </h1>
 
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-1 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-              Closes in
-            </p>
-            <p
-              className={`font-[family-name:var(--font-jetbrains-mono)] text-[clamp(1.6rem,3vw,2.4rem)] font-semibold leading-none tabular-nums ${
-                urgent ? "animate-pulse-soft" : ""
-              }`}
-              style={{
-                color: urgent ? "var(--color-amber)" : "var(--color-text)",
-              }}
-              suppressHydrationWarning
-            >
-              {ready ? formatCountdown(countdown) : "—:—"}
-            </p>
-          </div>
+          {resolved ? (
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                Truth revealed
+              </p>
+              <p
+                className="font-[family-name:var(--font-jetbrains-mono)] text-[clamp(1.4rem,2.4vw,1.9rem)] font-semibold leading-none text-glow-magenta"
+                style={{ color: "var(--color-magenta)" }}
+              >
+                Lisbon, PT
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                Closes in
+              </p>
+              <p
+                className={`font-[family-name:var(--font-jetbrains-mono)] text-[clamp(1.6rem,3vw,2.4rem)] font-semibold leading-none tabular-nums ${
+                  urgent ? "animate-pulse-soft" : ""
+                }`}
+                style={{
+                  color: urgent ? "var(--color-amber)" : "var(--color-text)",
+                }}
+                suppressHydrationWarning
+              >
+                {ready ? formatCountdown(countdown) : "—:—"}
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 text-xs text-[var(--color-text-muted)]">
             <Pill label="explorers" value={participants.toLocaleString()} />
