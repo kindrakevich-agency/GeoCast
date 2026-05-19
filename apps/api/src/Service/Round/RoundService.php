@@ -32,12 +32,14 @@ final class RoundService
         ?string $description = null,
     ): Round {
         return $this->em->wrapInTransaction(function () use ($question, $opensAt, $closesAt, $description): Round {
-            $next = $this->rounds->createQueryBuilder('r')
-                ->select('COALESCE(MAX(r.number), 0) + 1 AS next')
+            // DQL is stricter than SQL — `MAX(x) + 1` doesn't parse. Pull MAX, add in PHP.
+            $max = $this->rounds->createQueryBuilder('r')
+                ->select('MAX(r.number)')
                 ->getQuery()
                 ->getSingleScalarResult();
+            $next = ((int) $max) + 1;
 
-            $round = new Round((int) $next, $question, $opensAt, $closesAt);
+            $round = new Round($next, $question, $opensAt, $closesAt);
             if ($description !== null) {
                 $round->setDescription($description);
             }
