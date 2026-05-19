@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two deploys race the same /www/wwwroot working tree.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  frontend:
+    name: Frontend — typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript typecheck
+        run: pnpm --filter ./apps/web typecheck
+
+      - name: Build
+        run: pnpm --filter ./apps/web build
+
+  # PHP / Symfony job is intentionally absent for now — apps/api is a stub
+  # with no composer.lock yet. Re-enable when backend implementation begins:
+  #
+  # php:
+  #   name: PHP — lint + test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: shivammathur/setup-php@v2
+  #       with:
+  #         php-version: '8.3'
+  #         extensions: pdo_mysql, bcmath, intl, mbstring, redis, opcache, zip
+  #         tools: composer:v2
+  #     - name: Validate composer.json
+  #       working-directory: apps/api
+  #       run: composer validate --strict --no-check-publish
+  #     - name: Install
+  #       working-directory: apps/api
+  #       run: composer install --prefer-dist --no-interaction --no-progress
+  #     - name: Lint container
+  #       working-directory: apps/api
+  #       env:
+  #         APP_ENV: test
+  #         APP_SECRET: ci_test_secret_not_real
+  #         DATABASE_URL: 'mysql://test:test@127.0.0.1:3306/test?serverVersion=10.11.0-MariaDB'
+  #         REDIS_URL: 'redis://127.0.0.1:6379'
+  #       run: php bin/console lint:container
+
+  deploy:
+    name: Deploy to production
+    needs: [frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -e
+            APP_DIR=/www/wwwroot/geocast.kindrakevich.com
+            NODE_PID=/www/server/nodejs/vhost/pids/geocast.pid
+            NODE_SCRIPT=/www/server/nodejs/vhost/scripts/geocast.sh
+
+            echo "=== Pull latest code ==="
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Frontend: install + build ==="
+            corepack enable
+            corepack prepare pnpm@10.29.2 --activate
+            pnpm install --frozen-lockfile
+            NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api pnpm --filter ./apps/web build
+
+            echo "=== Permissions ==="
+            chown -R www:www apps/web/.next 2>/dev/null || true
+
+            echo "=== Restart Node project (managed by aaPanel) ==="
+            if [ -f "$NODE_PID" ]; then
+              kill "$(cat "$NODE_PID")" 2>/dev/null || true
+              sleep 2
+            fi
+            bash "$NODE_SCRIPT"
+            sleep 4
+            curl -sf -o /dev/null http://127.0.0.1:3010/ && echo "✓ web serving on :3010" || (echo "✗ web not responding" && tail -20 /www/wwwlogs/nodejs/geocast.log && exit 1)
+
+            # Backend hooks (no-op until apps/api implementation begins):
+            # PHP=/www/server/php/83/bin/php
+            # cd "$APP_DIR/apps/api" && $PHP /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction
+            # APP_ENV=prod $PHP bin/console cache:clear --no-warmup && APP_ENV=prod $PHP bin/console cache:warmup
+            # chown -R www:www var/ && APP_ENV=prod $PHP bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+            # /etc/init.d/php-fpm-83 restart
+
+            echo "=== Deploy complete ==="
