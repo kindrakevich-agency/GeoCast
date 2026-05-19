@@ -9,7 +9,10 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class HealthController
 {
-    #[Route('/api/health', name: 'api_health', methods: ['GET'])]
+    // NOTE: nginx mounts this Symfony app at /api/* via fastcgi_param
+    // SCRIPT_FILENAME=apps/api/public/index.php with SCRIPT_NAME=/api/index.php.
+    // Symfony's BasePath = /api so routes register as relative paths.
+    #[Route('/health', name: 'api_health', methods: ['GET'])]
     public function __invoke(): JsonResponse
     {
         return new JsonResponse([
