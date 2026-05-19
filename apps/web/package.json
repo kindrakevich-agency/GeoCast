@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.100.11",
     "@turf/turf": "^7.3.5",
     "clsx": "^2.1.1",
     "framer-motion": "^12.39.0",
@@ -18,7 +20,10 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-map-gl": "^8.1.1",
-    "tailwind-merge": "^2.6.0"
+    "siwe": "^3.0.0",
+    "tailwind-merge": "^2.6.0",
+    "viem": "^2.50.4",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",

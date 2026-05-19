@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AmbientMap } from "@/components/map/AmbientMap";
+import { ConnectWalletButton } from "@/components/auth/ConnectWalletButton";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { landingStats } from "@/lib/landing-pins";
 
 export default function Home() {
+  const router = useRouter();
+
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[var(--color-bg)] scanlines">
       <AmbientMap />
@@ -54,28 +58,7 @@ export default function Home() {
             One question. One pin. Closest answer wins.
           </p>
 
-          <Link
-            href="/rounds/demo"
-            className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] px-6 py-3.5 font-medium text-[var(--color-bg)] ring-glow-cyan transition-transform hover:scale-[1.015]"
-            style={{ background: "var(--color-cyan)" }}
-          >
-            <WalletIcon />
-            <span>Connect Wallet</span>
-            <span className="ml-1 font-[family-name:var(--font-jetbrains-mono)] text-xs opacity-70 transition-opacity group-hover:opacity-100">
-              → enter round
-            </span>
-            <motion.span
-              initial={{ x: "-130%", opacity: 0 }}
-              animate={{ x: "130%", opacity: [0, 0.55, 0] }}
-              transition={{ duration: 2.6, repeat: Infinity, repeatDelay: 1.4, ease: "easeInOut" }}
-              className="pointer-events-none absolute inset-y-0 w-1/3 rounded-sm"
-              style={{
-                background:
-                  "linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%)",
-                filter: "blur(2px)",
-              }}
-            />
-          </Link>
+          <ConnectWalletButton onSignedIn={() => router.push("/rounds/demo")} />
 
           <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
             SIWE — no email, no password, no tracking
@@ -156,17 +139,3 @@ function Sep() {
   return <span className="hidden h-3 w-px bg-[var(--color-border)] sm:block" />;
 }
 
-function WalletIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M3 7.5C3 6.12 4.12 5 5.5 5h13A2.5 2.5 0 0 1 21 7.5V9h-2V8a1 1 0 0 0-1-1H6a1 1 0 0 0 0 2h14v2H6a3 3 0 0 1-3-3V7.5z"
-        fill="currentColor"
-      />
-      <path
-        d="M3 10h17a1 1 0 0 1 1 1v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7zm14 4.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
