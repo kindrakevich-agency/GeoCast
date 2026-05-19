@@ -109,9 +109,32 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes pin-pulse-ring {
+  0% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.6);
+  }
+}
+
+@keyframes pin-pulse-core {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
 .animate-pulse-soft {
   animation: pulse-soft 2.4s ease-in-out infinite;
 }
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
+}
+
+.pin-pulse-ring {
+  animation: pin-pulse-ring 3.6s ease-out infinite;
+}
+.pin-pulse-core {
+  animation: pin-pulse-core 3.6s ease-in-out infinite;
 }
