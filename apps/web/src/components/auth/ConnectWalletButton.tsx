@@ -5,6 +5,11 @@ import { useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
 import { useAuth } from "@/hooks/useAuth";
 
+// Module-level latch — survives component remounts so accidental
+// double-mounts (StrictMode dev, RainbowKit modal animations, etc.)
+// don't double-fire the SIWE handshake.
+const attemptedAddresses = new Set<string>();
+
 /**
  * Single-button SIWE flow built on RainbowKit's ConnectButton.Custom.
  *
@@ -26,27 +31,41 @@ export function ConnectWalletButton({
   onSignedIn?: () => void;
 }) {
   const { isAuthed, isSigningIn, signIn, signOut, error } = useAuth();
-  const { isConnected } = useAccount();
-  const autoFiredRef = useRef(false);
+  const { isConnected, address } = useAccount();
 
-  // Fire signIn once when the wallet connects, IF the user isn't already
-  // signed in. Guarded by a ref so we don't loop on re-renders.
+  // Stable ref to the latest signIn so the effect deps don't include it
+  // (its useCallback identity changes whenever wagmi's signMessageAsync
+  // ref changes, which it does often). Including signIn in deps would
+  // re-fire the effect on every render → many concurrent nonce requests.
+  const signInRef = useRef(signIn);
   useEffect(() => {
-    if (!isConnected || isAuthed || isSigningIn) return;
-    if (autoFiredRef.current) return;
-    autoFiredRef.current = true;
-    void signIn()
+    signInRef.current = signIn;
+  }, [signIn]);
+
+  // Auto-fire SIWE exactly once per (wallet address) per session. If the
+  // user dismisses the wallet popup or the backend rejects, they have to
+  // click "Sign in to play" manually to retry — no automatic retry, no
+  // loop. The attempted-addresses set is module-level so React StrictMode
+  // double-mounts can't bypass it.
+  useEffect(() => {
+    if (!isConnected || !address || isAuthed || isSigningIn) return;
+    if (attemptedAddresses.has(address)) return;
+    attemptedAddresses.add(address);
+
+    void signInRef
+      .current()
       .then(() => onSignedIn?.())
       .catch(() => {
-        // User rejected the signature OR backend rejected — let them retry
-        // by clicking Sign in manually. Reset the auto-fire latch.
-        autoFiredRef.current = false;
+        // Intentionally not removing from attemptedAddresses — that would
+        // re-trigger the effect immediately and create a retry loop. The
+        // user must click "Sign in to play" manually to retry.
       });
-  }, [isConnected, isAuthed, isSigningIn, signIn, onSignedIn]);
+  }, [isConnected, address, isAuthed, isSigningIn, onSignedIn]);
 
-  // Reset latch when wallet disconnects so a fresh connect tries SIWE again.
+  // Clear the latch on disconnect so the NEXT connection (possibly with a
+  // different address) attempts SIWE fresh.
   useEffect(() => {
-    if (!isConnected) autoFiredRef.current = false;
+    if (!isConnected) attemptedAddresses.clear();
   }, [isConnected]);
 
   return (
