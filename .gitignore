@@ -1,0 +1,54 @@
+# env / secrets
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+config/jwt/
+
+# claude-code per-project state — contains permission cache that may include
+# raw curl commands with API keys. NEVER commit.
+.claude/
+
+# product spec / agent context — internal, not for public repo
+CLAUDE.md
+
+# node
+node_modules/
+.pnpm-store/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# php / symfony
+apps/api/vendor/
+apps/api/var/
+apps/api/.phpunit.result.cache
+apps/api/public/bundles/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.fleet/
+.history/
+
+# build artifacts
+dist/
+build/
+coverage/
