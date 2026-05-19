@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service\Round;
+
+use App\Entity\Round;
+use App\Enum\RoundStatus;
+use App\Repository\RoundRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+
+/**
+ * Round lifecycle operations driven by admin endpoints.
+ *
+ * Each round number is the result of `MAX(number) + 1` issued inside the
+ * create transaction — cheap and correct for the volume we'll ever see
+ * (one round per day max).
+ */
+final class RoundService
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly RoundRepository $rounds,
+    ) {
+    }
+
+    public function create(
+        string $question,
+        \DateTimeImmutable $opensAt,
+        \DateTimeImmutable $closesAt,
+        ?string $description = null,
+    ): Round {
+        return $this->em->wrapInTransaction(function () use ($question, $opensAt, $closesAt, $description): Round {
+            $next = $this->rounds->createQueryBuilder('r')
+                ->select('COALESCE(MAX(r.number), 0) + 1 AS next')
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            $round = new Round((int) $next, $question, $opensAt, $closesAt);
+            if ($description !== null) {
+                $round->setDescription($description);
+            }
+            $this->em->persist($round);
+            $this->em->flush();
+
+            return $round;
+        });
+    }
+
+    public function open(Round $round): Round
+    {
+        if ($round->getStatus() !== RoundStatus::Scheduled) {
+            throw new ConflictHttpException(
+                sprintf('Round #%d is %s, can only open a scheduled round.', $round->getNumber(), $round->getStatus()->value),
+            );
+        }
+        $round->setStatus(RoundStatus::Open);
+        $this->em->flush();
+
+        return $round;
+    }
+}
