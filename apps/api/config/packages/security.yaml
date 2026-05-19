@@ -27,14 +27,19 @@ security:
             provider: app_user_provider
             jwt: ~
 
-    # Note: only the first matching rule is applied.
+    # Note: only the first matching rule is applied. The `jwt:` authenticator
+    # parses tokens when present but does NOT reject anonymous requests —
+    # access_control is what enforces "this URL requires auth".
     access_control:
-        # Belt-and-suspenders — even if a route slips through the public
-        # firewall, the public paths stay accessible without a token.
+        # Public — explicitly listed first so they're not caught by the catch-all
         - { path: ^/auth, roles: PUBLIC_ACCESS }
         - { path: ^/health, roles: PUBLIC_ACCESS }
-        # JWT-required endpoints fall back to ROLE_USER at the access layer.
-        # The firewall above is what actually drives the 401.
+        - { path: ^/rounds/current$, roles: PUBLIC_ACCESS }
+        - { path: ^/leaderboard, roles: PUBLIC_ACCESS }
+        # Admin namespace
+        - { path: ^/admin, roles: ROLE_ADMIN }
+        # Everything else under /api requires a valid JWT (ROLE_USER)
+        - { path: ^/, roles: ROLE_USER }
 
 when@test:
     security:
