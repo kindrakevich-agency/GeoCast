@@ -95,10 +95,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # Optional — when unset, WalletConnect falls back to the geocast-dev
-      # placeholder which works for injected wallets but blackholes WC's
-      # analytics + remote-config endpoints (harmless 403/400 console noise).
+      # Public bundle-time config. All NEXT_PUBLIC_* values are baked into
+      # the client JS at build time, so they live in committed code or in
+      # GH secrets that we forward into the build env.
+      #
+      # WalletConnect projectId — when unset, falls back to the hard-coded
+      # default in apps/web/src/lib/wagmi.ts. Set to silence WC analytics
+      # 403s and enable mobile-wallet flows.
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
+      # Pusher Channels — when EITHER is unset, the frontend's pusher-js
+      # singleton stays null and real-time events are silently disabled
+      # (the backend's PusherBroadcaster mirrors this no-op pattern).
+      NEXT_PUBLIC_PUSHER_KEY:     ${{ secrets.NEXT_PUBLIC_PUSHER_KEY }}
+      NEXT_PUBLIC_PUSHER_CLUSTER: ${{ secrets.NEXT_PUBLIC_PUSHER_CLUSTER }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.5
@@ -107,9 +116,9 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 10m
-          # Pass the WalletConnect projectId through to the SSH session so
-          # the frontend build can bake it into the JS bundle.
-          envs: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+          # Forward NEXT_PUBLIC_* env vars to the SSH session so the
+          # frontend build inside the box can bake them into the bundle.
+          envs: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,NEXT_PUBLIC_PUSHER_KEY,NEXT_PUBLIC_PUSHER_CLUSTER
           script: |
             set -e
             APP_DIR=/www/wwwroot/geocast.kindrakevich.com
@@ -150,6 +159,8 @@ jobs:
             pnpm install --frozen-lockfile
             NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api \
             NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
+            NEXT_PUBLIC_PUSHER_KEY="$NEXT_PUBLIC_PUSHER_KEY" \
+            NEXT_PUBLIC_PUSHER_CLUSTER="$NEXT_PUBLIC_PUSHER_CLUSTER" \
               pnpm --filter ./apps/web build
 
             echo "=== Permissions ==="

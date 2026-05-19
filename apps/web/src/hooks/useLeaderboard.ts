@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type {
   ApiLeaderboardMe,
@@ -15,18 +15,23 @@ export type UseLeaderboardResult = {
   me: ApiLeaderboardMe | null;
   isLoading: boolean;
   error: ApiError | Error | null;
+  /** Force a re-fetch — useful for Pusher's `leaderboard-updated` event. */
+  refetch: () => void;
 };
 
 /**
  * Fetches `/api/leaderboard?period=<period>`. Re-runs whenever the
- * period changes. Returns the raw API rows — the consumer is free to
- * fall back to mock data on empty.
+ * period changes OR refetch() is called. Returns the raw API rows —
+ * the consumer is free to fall back to mock data on empty.
  */
 export function useLeaderboard(period: LeaderboardPeriod): UseLeaderboardResult {
   const [rows, setRows] = useState<ApiLeaderboardRow[]>([]);
   const [me, setMe] = useState<ApiLeaderboardMe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | Error | null>(null);
+  const [bump, setBump] = useState(0);
+
+  const refetch = useCallback(() => setBump((n) => n + 1), []);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -58,7 +63,7 @@ export function useLeaderboard(period: LeaderboardPeriod): UseLeaderboardResult 
       cancelled = true;
       ctrl.abort();
     };
-  }, [period]);
+  }, [period, bump]);
 
-  return { rows, me, isLoading, error };
+  return { rows, me, isLoading, error, refetch };
 }

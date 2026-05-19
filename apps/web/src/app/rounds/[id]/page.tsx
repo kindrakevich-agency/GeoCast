@@ -14,6 +14,7 @@ import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
 import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
+import { usePusherChannel } from "@/hooks/usePusherChannel";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { ApiPlacePredictionResponse } from "@/lib/api/types";
 import { demoPlayers, demoPresence, demoRound, type LngLat } from "@/lib/mock";
@@ -66,6 +67,32 @@ export default function ActiveRoundPage() {
     liveParticipants ?? (round.totalParticipants || demoRound.totalParticipants);
 
   const answer = round.answer ?? null;
+
+  // ---------- Real-time (Pusher) ----------
+  // Subscribe to `round-{id}` when the round is live (not the demo mock).
+  // Server emits `pin-placed` on every successful POST /predictions and
+  // `round-resolved` once on admin /resolve. No-op when Pusher isn't
+  // configured (NEXT_PUBLIC_PUSHER_KEY unset) — the page still works
+  // off synchronous API responses.
+  const pusherChannel = usingLive ? `round-${round.id}` : null;
+  usePusherChannel(pusherChannel, {
+    "pin-placed": (data) => {
+      const d = data as { count?: number; pool?: number };
+      if (typeof d.count === "number") setLiveParticipants(d.count);
+      if (typeof d.pool === "number") setLivePool(d.pool);
+    },
+    "round-resolved": (data) => {
+      const d = data as { answer?: { lat: number; lng: number } };
+      if (d.answer) {
+        // The local `answer` variable is derived from `round` — we can't
+        // mutate the API response here, so we trigger the resolution
+        // choreography via local state. The user's own pin (myPin) and
+        // demoPlayers seed the leaderboard until /api/rounds/{id}/results
+        // lands. For now: just flip into the resolved view.
+        setResolved(true);
+      }
+    },
+  });
 
   const ranked = useMemo(() => {
     if (!resolved || !myPin || !answer) return null;

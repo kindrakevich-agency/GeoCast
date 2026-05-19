@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LeaderboardMap } from "@/components/leaderboard/LeaderboardMap";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
+import { usePusherChannel } from "@/hooks/usePusherChannel";
 import type { ApiLeaderboardRow } from "@/lib/api/types";
 import {
   leaderboardData,
@@ -41,6 +42,14 @@ export default function LeaderboardPage() {
   const [hover, setHover] = useState<LeaderboardRow | null>(null);
 
   const api = useLeaderboard(period);
+
+  // Subscribe to the `leaderboard` channel — server broadcasts
+  // `leaderboard-updated` once per round resolve. No-op when Pusher
+  // isn't configured (the rest of the page still works off the initial
+  // fetch + tab-change refetches).
+  usePusherChannel("leaderboard", {
+    "leaderboard-updated": () => api.refetch(),
+  });
 
   // Strategy: if the API has rows for this period, show them. Otherwise
   // fall back to the rich mock so the page never looks empty pre-launch.
