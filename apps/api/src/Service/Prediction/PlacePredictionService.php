@@ -9,6 +9,7 @@ use App\Entity\Round;
 use App\Entity\User;
 use App\Enum\RoundStatus;
 use App\Repository\PredictionRepository;
+use App\Service\Broadcast\PusherBroadcaster;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -30,6 +31,7 @@ final class PlacePredictionService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PredictionRepository $predictions,
+        private readonly PusherBroadcaster $broadcaster,
     ) {
     }
 
@@ -53,7 +55,7 @@ final class PlacePredictionService
             throw new ConflictHttpException('Insufficient credits (1 required).');
         }
 
-        return $this->em->wrapInTransaction(function () use ($user, $round, $lat, $lng): Prediction {
+        $prediction = $this->em->wrapInTransaction(function () use ($user, $round, $lat, $lng): Prediction {
             // Refresh inside the transaction so we don't act on stale state if
             // a concurrent request also just decremented this user.
             $this->em->refresh($user);
@@ -67,16 +69,26 @@ final class PlacePredictionService
                 throw new ConflictHttpException('You have already placed a pin in this round.');
             }
 
-            $prediction = new Prediction($user, $round, $lat, $lng);
+            $newPrediction = new Prediction($user, $round, $lat, $lng);
 
             $user->setCreditsBalance($user->getCreditsBalance() - 1);
             $round->setPoolCredits($round->getPoolCredits() + 1);
             $round->setTotalParticipants($round->getTotalParticipants() + 1);
 
-            $this->em->persist($prediction);
+            $this->em->persist($newPrediction);
             $this->em->flush();
 
-            return $prediction;
+            return $newPrediction;
         });
+
+        // Real-time broadcast — outside the txn so a Pusher hiccup doesn't
+        // roll back the placement. PusherBroadcaster swallows all errors.
+        $this->broadcaster->broadcastPinPlaced(
+            (string) $round->getId(),
+            $round->getTotalParticipants(),
+            $round->getPoolCredits(),
+        );
+
+        return $prediction;
     }
 }

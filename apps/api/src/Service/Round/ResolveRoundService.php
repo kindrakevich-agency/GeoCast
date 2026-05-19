@@ -7,6 +7,7 @@ namespace App\Service\Round;
 use App\Entity\Round;
 use App\Enum\RoundStatus;
 use App\Repository\PredictionRepository;
+use App\Service\Broadcast\PusherBroadcaster;
 use App\Service\Leaderboard\LeaderboardZSetWriter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -39,6 +40,7 @@ final class ResolveRoundService
         private readonly EntityManagerInterface $em,
         private readonly PredictionRepository $predictions,
         private readonly LeaderboardZSetWriter $zsets,
+        private readonly PusherBroadcaster $broadcaster,
     ) {
     }
 
@@ -146,6 +148,17 @@ final class ResolveRoundService
                 // swallow — we'd log via monolog if it were wired
             }
         }
+
+        // Real-time broadcast — same best-effort posture. PusherBroadcaster
+        // is a no-op when creds aren't configured, so this is safe to call
+        // unconditionally.
+        $this->broadcaster->broadcastRoundResolved(
+            (string) $round->getId(),
+            $answerLat,
+            $answerLng,
+            $rows,
+        );
+        $this->broadcaster->broadcastLeaderboardUpdated();
 
         return $rows;
     }

@@ -74,6 +74,15 @@
             "bin/phpunit"
         ]
     },
+    "pusher/pusher-php-server": {
+        "version": "7.2",
+        "recipe": {
+            "repo": "github.com/symfony/recipes-contrib",
+            "branch": "main",
+            "version": "3.0",
+            "ref": "8dd3ea817217453e14ab596317177465211e01d2"
+        }
+    },
     "symfony/console": {
         "version": "7.4",
         "recipe": {
