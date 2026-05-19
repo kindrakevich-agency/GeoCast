@@ -140,11 +140,32 @@ the all-time leaderboard.
 - [x] Active round screen — map · question card · pin drop · ripple · confirm modal · presence dots · heatmap reveal · side panel
 - [x] Landing page with ambient drifting world map + 50 pulsing pins
 - [x] Resolution choreography — answer pin · flyTo · great-circle line · distance badge · leaderboard slide-in · confetti for top-10
+- [x] Profile (`/me`) + Leaderboard (`/leaderboard`) pages
 - [x] Production deploy → [geocast.kindrakevich.com](https://geocast.kindrakevich.com) (Hetzner + Cloudflare + GitHub Actions auto-deploy)
-- [ ] Profile page + career heatmap
-- [ ] Symfony API — SIWE auth → rounds → predictions → resolution
+- [x] Symfony 7.4 API foundation — `/api/health`
+- [x] SIWE auth — `POST /api/auth/nonce` (Redis nonce, 5min TTL) and `POST /api/auth/verify` (signature recovery → JWT)
+- [ ] `/api/me` (JWT-gated current user)
+- [ ] `/api/rounds/current` + `POST /api/rounds/:id/predictions`
 - [ ] Pusher wiring on both sides
 - [ ] Admin tools (round CRUD + geocoded resolution)
+
+## Auth flow
+
+```
+1. Wallet → POST /api/auth/nonce  { address }
+                                  → { nonce, address, expiresIn }
+
+2. Wallet signs EIP-4361 SIWE message containing the nonce.
+
+3. Wallet → POST /api/auth/verify { message, signature }
+                                  → { token, user }
+
+4. Subsequent requests carry `Authorization: Bearer <token>`.
+```
+
+The nonce is single-use, Redis-backed with a 5-minute TTL, and namespaced
+`geocast:siwe:nonce:<address>` so it can never collide with other apps
+sharing the same Redis instance.
 
 ---
 
