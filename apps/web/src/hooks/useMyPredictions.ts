@@ -7,6 +7,8 @@ import type { ApiPredictionHistoryResponse } from "@/lib/api/types";
 export type UseMyPredictionsResult = {
   data: ApiPredictionHistoryResponse | null;
   isLoading: boolean;
+  /** True once we've either resolved a response or skipped (unauthed). */
+  isSettled: boolean;
   error: ApiError | Error | null;
 };
 
@@ -17,10 +19,14 @@ export type UseMyPredictionsResult = {
 export function useMyPredictions(perPage: number = 10): UseMyPredictionsResult {
   const [data, setData] = useState<ApiPredictionHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSettled, setIsSettled] = useState(false);
   const [error, setError] = useState<ApiError | Error | null>(null);
 
   useEffect(() => {
-    if (!getValidToken()) return;
+    if (!getValidToken()) {
+      setIsSettled(true);
+      return;
+    }
     setIsLoading(true);
     const ctrl = new AbortController();
     let cancelled = false;
@@ -37,7 +43,10 @@ export function useMyPredictions(perPage: number = 10): UseMyPredictionsResult {
         if ((e as Error).name === "AbortError") return;
         setError(e as Error);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setIsSettled(true);
+        }
       }
     })();
 
@@ -47,5 +56,5 @@ export function useMyPredictions(perPage: number = 10): UseMyPredictionsResult {
     };
   }, [perPage]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, isSettled, error };
 }

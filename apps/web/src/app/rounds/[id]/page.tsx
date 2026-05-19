@@ -59,9 +59,11 @@ export default function ActiveRoundPage() {
   // returns the persisted placement (or null) so the page knows whether the
   // user already played this round. Without this the local state always
   // starts at null and the user loses their pin on F5.
-  const { prediction: persistedPrediction } = useMyRoundPrediction(
-    liveRound?.id ?? null,
-  );
+  const {
+    prediction: persistedPrediction,
+    isLoading: predictionLoading,
+    refetch: refetchMyPrediction,
+  } = useMyRoundPrediction(liveRound?.id ?? null);
   useEffect(() => {
     if (!persistedPrediction || myPin !== null) return;
     setMyPin({ lat: persistedPrediction.lat, lng: persistedPrediction.lng });
@@ -156,6 +158,10 @@ export default function ActiveRoundPage() {
 
   const onMapClick = (coords: LngLat) => {
     if (placed || submitting) return;
+    // Block clicks while we're still hydrating the user's prior placement —
+    // otherwise a fast click between page-load and the /my-prediction
+    // response races straight into a guaranteed-409 POST.
+    if (isAuthed && usingLive && predictionLoading) return;
     setSubmitError(null);
     setPending(coords);
   };
@@ -193,6 +199,12 @@ export default function ActiveRoundPage() {
           ? humanizeApiError(e)
           : (e as Error).message || "Failed to place pin.";
       setSubmitError(msg);
+      // 409 means the server has a prediction for this user/round already.
+      // Refetch /my-prediction so the page picks it up and the pin renders.
+      if (e instanceof ApiError && e.status === 409) {
+        refetchMyPrediction();
+        setPending(null);
+      }
     } finally {
       setSubmitting(false);
     }

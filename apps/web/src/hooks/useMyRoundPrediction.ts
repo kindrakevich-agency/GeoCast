@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
 import type { ApiPrediction } from "@/lib/api/types";
 
@@ -9,6 +9,9 @@ export type UseMyRoundPredictionResult = {
   prediction: ApiPrediction | null;
   isLoading: boolean;
   error: ApiError | Error | null;
+  /** Force a re-fetch — useful when a POST returns 409 (prediction exists
+   *  server-side but our client hasn't seen it yet). */
+  refetch: () => void;
 };
 
 /**
@@ -24,6 +27,9 @@ export function useMyRoundPrediction(
   const [prediction, setPrediction] = useState<ApiPrediction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | Error | null>(null);
+  const [bump, setBump] = useState(0);
+
+  const refetch = useCallback(() => setBump((n) => n + 1), []);
 
   useEffect(() => {
     if (!roundId) return;
@@ -53,7 +59,7 @@ export function useMyRoundPrediction(
       cancelled = true;
       ctrl.abort();
     };
-  }, [roundId]);
+  }, [roundId, bump]);
 
-  return { prediction, isLoading, error };
+  return { prediction, isLoading, error, refetch };
 }

@@ -37,8 +37,8 @@ export default function ProfilePage() {
   // can flip this page from authed-empty back to anonymous on stale-JWT
   // 401s — useMe's local state would otherwise stay stuck on isAuthed=true.
   const { user, isAuthed } = useAuth();
-  const { pins: livePins } = useCareerPins();
-  const { data: history } = useMyPredictions(10);
+  const { pins: livePins, isSettled: pinsSettled } = useCareerPins();
+  const { data: history, isSettled: historySettled } = useMyPredictions(10);
 
   // Mixed history: include in-progress pins (rank/distance null) so a user
   // who's placed a pin on the active round sees themselves in the timeline.
@@ -68,10 +68,21 @@ export default function ProfilePage() {
   );
 
   // Source-of-truth flags. Drives the three-state branching below.
+  // `Settled` means the hook either fetched a response OR skipped because
+  // the user is unauthed — distinguishes "loaded empty" from "still loading".
+  // Without this, a slow API call flashes the "you haven't played" empty
+  // state for every authed visitor on /me before the data arrives.
   const hasLivePins = livePins !== null && livePins.length > 0;
   const hasLiveHistory = liveRecentRounds.length > 0;
-  const isAuthedEmpty = isAuthed && livePins !== null && livePins.length === 0
-                                 && history !== null && history.items.length === 0;
+  const isAuthedEmpty =
+    isAuthed && pinsSettled && historySettled
+    && (livePins?.length ?? 0) === 0
+    && (history?.items.length ?? 0) === 0;
+  // Render the "you haven't played" CTA only when we've confirmed empty —
+  // otherwise show the demo (mock) while hooks are still settling so the
+  // page never looks broken.
+  const showEmptyHistory = isAuthed && historySettled && liveRecentRounds.length === 0;
+  const showEmptyPins = isAuthed && pinsSettled && (livePins?.length ?? 0) === 0;
 
   // Display data: live for authed-with-data, mock for everyone else.
   const careerPins = hasLivePins ? livePins : mockCareerPins;
@@ -202,14 +213,14 @@ export default function ProfilePage() {
           transition={{ delay: 0.18, duration: 0.3 }}
           className="mt-8"
         >
-          {hasLivePins || !isAuthed ? (
-            <CareerHeatmap pins={careerPins} />
-          ) : (
+          {showEmptyPins ? (
             <EmptyState
               title="Your career heatmap starts here"
               body="Every pin you drop lands on this map for life. Drop your first one and the heatmap begins."
               cta="Drop a pin →"
             />
+          ) : (
+            <CareerHeatmap pins={careerPins} />
           )}
         </motion.section>
 
@@ -221,24 +232,23 @@ export default function ProfilePage() {
         >
           <h2 className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
             Recent rounds · {hasLiveHistory ? liveRecentRounds.length : mockRecentRounds.length}
-            {hasLiveHistory || !isAuthed ? null : null}
             {!hasLiveHistory && !isAuthed && (
               <span className="ml-2 text-[var(--color-text-muted)] opacity-60">(demo)</span>
             )}
           </h2>
-          {hasLiveHistory || !isAuthed ? (
-            <ul className="space-y-2">
-              {recentRounds.map((r, i) => (
-                <RecentRoundCard key={r.number} round={r} index={i} />
-              ))}
-            </ul>
-          ) : (
+          {showEmptyHistory ? (
             <EmptyState
               title="You haven't played a round yet"
               body="One pin, one round, one shot at the truth. Your timeline fills in as soon as you place your first pin."
               cta="Go to the active round →"
               compact
             />
+          ) : (
+            <ul className="space-y-2">
+              {recentRounds.map((r, i) => (
+                <RecentRoundCard key={r.number} round={r} index={i} />
+              ))}
+            </ul>
           )}
         </motion.section>
 
