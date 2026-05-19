@@ -44,8 +44,13 @@ final class PredictionsController
             throw new NotFoundHttpException(sprintf('Round "%s" not found.', $id));
         }
 
-        /** @var User $user */
+        /** @var User|null $user */
         $user = $this->security->getUser();
+        if (!$user instanceof User) {
+            // Should be unreachable — access_control denies anonymous before
+            // we get here. Belt + suspenders so we never null-crash.
+            throw new \LogicException('Authenticated user required.');
+        }
 
         $body = $this->decodeJson($request);
         $lat = isset($body['lat']) && (\is_int($body['lat']) || \is_float($body['lat'])) ? (float) $body['lat'] : null;
