@@ -25,3 +25,7 @@
 /phpunit.xml
 /.phpunit.cache/
 ###< phpunit/phpunit ###
+
+# Symfony auto-generated IDE-autocomplete config typeshape (regenerates
+# every container compile — noisy in diffs, not needed at runtime).
+/config/reference.php
