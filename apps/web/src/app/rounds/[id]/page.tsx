@@ -15,6 +15,7 @@ import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
 import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyRoundPrediction } from "@/hooks/useMyRoundPrediction";
 import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
 import { ApiError, apiFetch } from "@/lib/api/client";
@@ -53,6 +54,18 @@ export default function ActiveRoundPage() {
   const [myPin, setMyPin] = useState<LngLat | null>(null);
   const [resolved, setResolved] = useState(false);
   const placed = myPin !== null;
+
+  // Rehydrate the user's pin across reloads. /api/rounds/{id}/my-prediction
+  // returns the persisted placement (or null) so the page knows whether the
+  // user already played this round. Without this the local state always
+  // starts at null and the user loses their pin on F5.
+  const { prediction: persistedPrediction } = useMyRoundPrediction(
+    liveRound?.id ?? null,
+  );
+  useEffect(() => {
+    if (!persistedPrediction || myPin !== null) return;
+    setMyPin({ lat: persistedPrediction.lat, lng: persistedPrediction.lng });
+  }, [persistedPrediction, myPin]);
 
   // Local pool/participants override populated from /predictions response.
   // (Live round state could lag — we got the authoritative numbers back from
@@ -285,28 +298,6 @@ export default function ActiveRoundPage() {
           : "mock data"}
       </div>
 
-      {placed && !resolved && (
-        <button
-          onClick={() => setResolved(true)}
-          className="pointer-events-auto absolute bottom-6 right-4 z-40 rounded-full border border-dashed border-[var(--color-border)] bg-black/50 px-4 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-muted)] backdrop-blur-md transition-colors hover:border-[var(--color-magenta)] hover:text-white"
-        >
-          dev · resolve round →
-        </button>
-      )}
-
-      {resolved && (
-        <button
-          onClick={() => {
-            setResolved(false);
-            setMyPin(null);
-            setLivePool(null);
-            setLiveParticipants(null);
-          }}
-          className="pointer-events-auto absolute bottom-6 right-4 z-40 rounded-full border border-dashed border-[var(--color-border)] bg-black/50 px-4 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-muted)] backdrop-blur-md transition-colors hover:border-[var(--color-cyan)] hover:text-white"
-        >
-          dev · reset round →
-        </button>
-      )}
     </main>
   );
 }
