@@ -13,10 +13,14 @@ security:
             security: false
 
         # Public sub-firewall — no auth required, no Lexik intervention.
-        # Covers nonce/verify (the JWT issuance flow), health, and
-        # read-only round/leaderboard endpoints.
+        # Covers nonce/verify (the JWT issuance flow), health, and the
+        # read-only single-round endpoint.
+        #
+        # Note: /leaderboard is INTENTIONALLY not here. It's still public
+        # via access_control, but goes through the `api` firewall so a
+        # JWT (when sent) gets parsed and the controller can flag isMe.
         api_public:
-            pattern: ^/(auth|health|rounds$|rounds/[^/]+$|leaderboard)
+            pattern: ^/(auth|health|rounds$|rounds/[^/]+$)
             stateless: true
             security: false
 
