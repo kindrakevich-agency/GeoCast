@@ -63,6 +63,8 @@ This is a deliberate showcase of the full senior full-stack surface:
 
 ![Active round — question card, presence cursors, crosshair drop](docs/screenshots/round-active.png)
 ![Resolution — answer pin, great-circle line, distance badge](docs/screenshots/resolution.png)
+![Profile — career heatmap of every pin you've ever dropped](docs/screenshots/profile.png)
+![Leaderboard — slide-in modal · today / week / all-time tabs](docs/screenshots/leaderboard.png)
 
 The active-round screen is the centrepiece — the place to spend the
 most polish budget. Open `localhost:3000/rounds/demo` after starting
