@@ -34,3 +34,15 @@ services:
     App\Service\User\UserProvisioner:
         arguments:
             $adminWalletsCsv: '%env(ADMIN_WALLETS)%'
+
+    # ---------- Pusher (real-time) ----------
+    # Scalar string args can't autowire — Symfony has no way to map
+    # `string $appId` to the right env var. Explicit binding required;
+    # when any of the three is empty the broadcaster falls back to silent
+    # no-op mode (and /api/pusher/auth returns 503 with a clear message).
+    App\Service\Broadcast\PusherBroadcaster:
+        arguments:
+            $appId:   '%env(PUSHER_APP_ID)%'
+            $key:     '%env(PUSHER_KEY)%'
+            $secret:  '%env(PUSHER_SECRET)%'
+            $cluster: '%env(PUSHER_CLUSTER)%'
