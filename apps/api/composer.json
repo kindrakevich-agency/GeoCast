@@ -11,6 +11,8 @@
     "doctrine/doctrine-bundle": "^2.13",
     "doctrine/doctrine-migrations-bundle": "^3.4",
     "doctrine/orm": "^3.3",
+    "kornrunner/keccak": "^1.1",
+    "kornrunner/secp256k1": "^0.4.0",
     "lexik/jwt-authentication-bundle": "^3.1",
     "nelmio/cors-bundle": "^2.5",
     "predis/predis": "^2.4",
@@ -38,7 +40,8 @@
       "symfony/runtime": true
     },
     "platform": {
-      "php": "8.3.31"
+      "php": "8.3.31",
+      "ext-gmp": "6.3.0"
     },
     "sort-packages": true
   },

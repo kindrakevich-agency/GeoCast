@@ -24,3 +24,13 @@ services:
             $parameters: '%app.redis_url%'
             $options:
                 prefix: '%app.redis_prefix%'
+
+    # ---------- SIWE ----------
+    App\Service\Siwe\SiweVerifier:
+        arguments:
+            $allowedChainIdsCsv: '%env(SIWE_ALLOWED_CHAIN_IDS)%'
+
+    # ---------- User provisioning ----------
+    App\Service\User\UserProvisioner:
+        arguments:
+            $adminWalletsCsv: '%env(ADMIN_WALLETS)%'
