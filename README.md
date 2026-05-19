@@ -51,6 +51,8 @@ This is a deliberate showcase of the full senior full-stack surface:
 
 ## The screens
 
+![Landing — drifting world map, pulsing pins, glass auth card](docs/screenshots/hero.png)
+
 | Screen          | Highlight                                                                       |
 |-----------------|---------------------------------------------------------------------------------|
 | Landing         | Pulsing pins on a dark world map · glassmorphic auth card                       |
@@ -59,9 +61,25 @@ This is a deliberate showcase of the full senior full-stack surface:
 | Profile         | Career heatmap (every pin you ever dropped) · stats grid                        |
 | Leaderboard     | Slide-in modal with today / week / all-time tabs                                |
 
+![Active round — question card, presence cursors, crosshair drop](docs/screenshots/round-active.png)
+![Resolution — answer pin, great-circle line, distance badge](docs/screenshots/resolution.png)
+
 The active-round screen is the centrepiece — the place to spend the
 most polish budget. Open `localhost:3000/rounds/demo` after starting
 the dev server to see it.
+
+### Regenerating the screenshots
+
+Screenshots live in `docs/screenshots/` and are captured from the live
+site by a small Playwright script. Run it whenever the UI ships a
+visible change:
+
+```bash
+pnpm dlx playwright@latest install chromium
+node infra/scripts/capture-screenshots.mjs
+# Or against a local dev server:
+node infra/scripts/capture-screenshots.mjs --base http://localhost:3000
+```
 
 ---
 
@@ -144,10 +162,11 @@ the all-time leaderboard.
 - [x] Production deploy → [geocast.kindrakevich.com](https://geocast.kindrakevich.com) (Hetzner + Cloudflare + GitHub Actions auto-deploy)
 - [x] Symfony 7.4 API foundation — `/api/health`
 - [x] SIWE auth — `POST /api/auth/nonce` (Redis nonce, 5min TTL) and `POST /api/auth/verify` (signature recovery → JWT)
-- [ ] `/api/me` (JWT-gated current user)
-- [ ] `/api/rounds/current` + `POST /api/rounds/:id/predictions`
-- [ ] Pusher wiring on both sides
-- [ ] Admin tools (round CRUD + geocoded resolution)
+- [x] `/api/me`, `/api/me/predictions` (paginated history), `/api/me/career-pins`
+- [x] `/api/rounds/current` + `POST /api/rounds/:id/predictions`
+- [x] Pusher wiring — server broadcasts (`pin-placed`, `round-resolved`, `leaderboard-updated`) and live presence cursors over `presence-round-{id}` client events
+- [x] Admin tools — round CRUD, geocoded resolution, leaderboard recompute
+- [x] Cron-driven lifecycle — `app:rounds:tick` promotes scheduled → open → closed on the wall-clock
 
 ## Auth flow
 

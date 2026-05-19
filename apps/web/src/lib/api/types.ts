@@ -81,3 +81,38 @@ export type ApiLeaderboardResponse = {
   rows: ApiLeaderboardRow[];
   me: ApiLeaderboardMe | null;
 };
+
+export type ApiCareerPin = {
+  lng: number;
+  lat: number;
+  roundNumber: number;
+  distanceKm: number;
+};
+
+export type ApiPredictionHistoryItem = {
+  id: string;
+  placedAt: string;
+  myPin: LngLat;
+  distanceKm: number | null;
+  rank: number | null;
+  payout: number;
+  creditsStaked: number;
+  round: {
+    id: string;
+    number: number;
+    question: string;
+    status: RoundStatus;
+    closesAt: string;
+    resolvedAt: string | null;
+    answer: LngLat | null;
+    totalParticipants: number;
+    poolCredits: number;
+  };
+};
+
+export type ApiPredictionHistoryResponse = {
+  items: ApiPredictionHistoryItem[];
+  total: number;
+  page: number;
+  perPage: number;
+};

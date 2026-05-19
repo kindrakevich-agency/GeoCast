@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BottomHint } from "@/components/round/BottomHint";
 import { ClaimBar } from "@/components/round/ClaimBar";
@@ -14,10 +14,11 @@ import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
 import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
+import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { ApiPlacePredictionResponse } from "@/lib/api/types";
-import { demoPlayers, demoPresence, demoRound, type LngLat } from "@/lib/mock";
+import { demoPlayers, demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
 import { rank, withUserPin } from "@/lib/scoring";
 
 /**
@@ -62,19 +63,39 @@ export default function ActiveRoundPage() {
     answer: demoRound.answer ?? null,
   };
 
-  const displayPool = livePool ?? (round.poolCredits || demoRound.poolCredits);
-  const displayParticipants =
-    liveParticipants ?? (round.totalParticipants || demoRound.totalParticipants);
-
   const answer = round.answer ?? null;
 
   // ---------- Real-time (Pusher) ----------
-  // Subscribe to `round-{id}` when the round is live (not the demo mock).
-  // Server emits `pin-placed` on every successful POST /predictions and
-  // `round-resolved` once on admin /resolve. No-op when Pusher isn't
-  // configured (NEXT_PUBLIC_PUSHER_KEY unset) — the page still works
-  // off synchronous API responses.
+  // Two channels: the public `round-{id}` for server-broadcast events
+  // (pin-placed, round-resolved) and the auth'd `presence-round-{id}` for
+  // peer cursor positions (client-cursor-move) plus the live watcher count.
+  // Both no-op silently when Pusher isn't configured.
   const pusherChannel = usingLive ? `round-${round.id}` : null;
+  const presenceRoundId = usingLive && isAuthed && !resolved ? round.id : null;
+
+  const localCursorRef = useRef<LngLat | null>(null);
+  const { memberCount, cursors } = usePresenceCursors(presenceRoundId, localCursorRef);
+
+  const displayPool = livePool ?? (round.poolCredits || demoRound.poolCredits);
+  const predictionCount =
+    liveParticipants ?? (round.totalParticipants || demoRound.totalParticipants);
+  // The "explorers playing now" badge shows live watcher count from Pusher
+  // presence — never less than how many have actually placed pins.
+  const displayParticipants = Math.max(predictionCount, memberCount);
+
+  // Map peer cursors → the MockPresence shape MapStage already renders.
+  // Falls back to demoPresence on the demo round / when Pusher's off so the
+  // landing-style "live cursors" feel survives in mock mode.
+  const livePresence = useMemo<MockPresence[]>(() => {
+    const peers = Object.values(cursors);
+    if (peers.length === 0 && !usingLive) return demoPresence;
+    return peers.map((p) => ({
+      id: p.userId,
+      handle: shortWallet(p.wallet),
+      cursor: { lng: p.lng, lat: p.lat },
+    }));
+  }, [cursors, usingLive]);
+
   usePusherChannel(pusherChannel, {
     "pin-placed": (data) => {
       const d = data as { count?: number; pool?: number };
@@ -157,9 +178,12 @@ export default function ActiveRoundPage() {
         resolved={resolved}
         myPin={myPin}
         answer={resolved ? answer : null}
-        presence={demoPresence}
+        presence={livePresence}
         players={demoPlayers}
         onMapClick={onMapClick}
+        onCursorMove={(c) => {
+          localCursorRef.current = c;
+        }}
       />
 
       <TopBar wallet="0x7f4c…a3b1" balance={100} />

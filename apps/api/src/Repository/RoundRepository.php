@@ -32,4 +32,36 @@ final class RoundRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Scheduled rounds whose opensAt has passed — ready to flip to Open.
+     *
+     * @return Round[]
+     */
+    public function findDueToOpen(\DateTimeImmutable $now): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->andWhere('r.opensAt <= :now')
+            ->setParameter('status', RoundStatus::Scheduled)
+            ->setParameter('now', $now)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Open rounds whose closesAt has passed — ready to flip to Closed.
+     *
+     * @return Round[]
+     */
+    public function findDueToClose(\DateTimeImmutable $now): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->andWhere('r.closesAt <= :now')
+            ->setParameter('status', RoundStatus::Open)
+            ->setParameter('now', $now)
+            ->getQuery()
+            ->getResult();
+    }
 }

@@ -25,6 +25,10 @@ export type MapStageProps = {
   presence: MockPresence[];
   players: MockPlayer[];
   onMapClick: (coords: LngLat) => void;
+  /** Fires on every mousemove over the map with the cursor lng/lat. Used to
+   *  feed the presence-cursor broadcaster — kept as a prop so MapStage owns
+   *  the maplibre event and the page owns the throttled outbound channel. */
+  onCursorMove?: (coords: LngLat | null) => void;
   overlay?: ReactNode;
 };
 
@@ -36,6 +40,7 @@ export function MapStage({
   presence,
   players,
   onMapClick,
+  onCursorMove,
   overlay,
 }: MapStageProps) {
   const mapRef = useRef<MapRef | null>(null);
@@ -140,9 +145,12 @@ export function MapStage({
   const handleMove = (e: MapLayerMouseEvent) => {
     if (placed) {
       if (cursor !== null) setCursor(null);
+      onCursorMove?.(null);
       return;
     }
-    setCursor({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    const c = { lng: e.lngLat.lng, lat: e.lngLat.lat };
+    setCursor(c);
+    onCursorMove?.(c);
   };
 
   return (
@@ -163,7 +171,10 @@ export function MapStage({
         attributionControl={false}
         onClick={handleClick}
         onMouseMove={handleMove}
-        onMouseOut={() => setCursor(null)}
+        onMouseOut={() => {
+          setCursor(null);
+          onCursorMove?.(null);
+        }}
         dragRotate={false}
         touchPitch={false}
         cursor={placed ? "grab" : "crosshair"}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { AmbientMap } from "@/components/map/AmbientMap";
 import { Avatar } from "@/components/profile/Avatar";
@@ -8,26 +9,57 @@ import { CareerHeatmap } from "@/components/profile/CareerHeatmap";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { RecentRoundCard } from "@/components/profile/RecentRoundCard";
 import { StatCard } from "@/components/profile/StatCard";
+import { useCareerPins } from "@/hooks/useCareerPins";
 import { useMe } from "@/hooks/useMe";
-import { careerPins, myStats, recentRounds } from "@/lib/profile-mock";
+import { useMyPredictions } from "@/hooks/useMyPredictions";
+import type { ApiPredictionHistoryItem } from "@/lib/api/types";
+import { careerPins as mockCareerPins, myStats, recentRounds as mockRecentRounds, type PastRound } from "@/lib/profile-mock";
 import { shortWallet } from "@/lib/mock";
 
 /**
- * Profile page. When a JWT is in storage, /api/me data overlays the
- * stat-grid fields we have real values for (wallet, gamesPlayed,
- * creditsBalance, totalScore). The career heatmap + recent rounds
- * still render from mock data — those endpoints (/api/me/career-pins,
- * /api/me/predictions) haven't been built yet.
- *
- * Unauthenticated → pure mock so the page never looks empty.
+ * Profile page. When a JWT is in storage, /api/me supplies the headline
+ * stats, /api/me/career-pins fills the heatmap, and /api/me/predictions
+ * fills the recent-rounds timeline. Each section independently falls back
+ * to the mock data so an empty-history user still sees a full page, and
+ * an unauthenticated visitor gets the full demo.
  */
 export default function ProfilePage() {
   const { user, isAuthed } = useMe();
+  const { pins: livePins } = useCareerPins();
+  const { data: history } = useMyPredictions(10);
 
   const wallet = user?.walletAddress ?? myStats.wallet;
   const gamesPlayed = user?.gamesPlayed ?? myStats.gamesPlayed;
   const creditsBalance = user?.creditsBalance ?? myStats.totalCreditsEarned;
   const totalScore = user?.totalScore ?? myStats.totalScore;
+
+  const careerPins = livePins && livePins.length > 0 ? livePins : mockCareerPins;
+  const isCareerPinsLive = livePins !== null && livePins.length > 0;
+
+  // Convert API history to the PastRound shape the timeline card already
+  // renders. Only resolved rounds carry the fields the card needs.
+  const liveRecentRounds = useMemo<PastRound[]>(() => {
+    if (!history) return [];
+    return history.items
+      .filter((it): it is ApiPredictionHistoryItem & { distanceKm: number; rank: number; round: { answer: NonNullable<ApiPredictionHistoryItem["round"]["answer"]> } } =>
+        it.round.answer !== null && it.distanceKm !== null && it.rank !== null,
+      )
+      .map((it) => ({
+        number: it.round.number,
+        question: it.round.question,
+        date: it.placedAt.slice(0, 10),
+        answerLabel: `${it.round.answer.lat.toFixed(2)}, ${it.round.answer.lng.toFixed(2)}`,
+        myPin: it.myPin,
+        answer: it.round.answer,
+        distanceKm: it.distanceKm,
+        rank: it.rank,
+        totalPlayers: it.round.totalParticipants,
+        payout: it.payout,
+      }));
+  }, [history]);
+
+  const recentRounds = liveRecentRounds.length > 0 ? liveRecentRounds : mockRecentRounds;
+  const isHistoryLive = liveRecentRounds.length > 0;
 
   const winRate = (
     (recentRounds.filter((r) => r.rank <= 10).length / recentRounds.length) * 100
@@ -137,6 +169,9 @@ export default function ProfilePage() {
         >
           <h2 className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
             Recent rounds · {recentRounds.length}
+            {isHistoryLive ? null : (
+              <span className="ml-2 text-[var(--color-text-muted)] opacity-60">(demo)</span>
+            )}
           </h2>
           <ul className="space-y-2">
             {recentRounds.map((r, i) => (
@@ -147,7 +182,7 @@ export default function ProfilePage() {
 
         <p className="mt-10 text-center text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           {isAuthed
-            ? `live profile · ${user?.walletAddress ? shortWallet(user.walletAddress) : ""}`
+            ? `live profile · ${user?.walletAddress ? shortWallet(user.walletAddress) : ""}${isCareerPinsLive ? "" : " · heatmap demo"}`
             : `${myStats.pinsPerWeek} pins/week · total score ${myStats.totalScore.toFixed(2)} · (demo data)`}
         </p>
       </div>
