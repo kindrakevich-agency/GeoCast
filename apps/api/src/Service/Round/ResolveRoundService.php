@@ -62,10 +62,12 @@ final class ResolveRoundService
             // alias (km) populated via a custom column.
             $conn = $this->em->getConnection();
             $idBin = $round->getId()->toBinary();
+            // HEX()/UNHEX() is portable across MySQL 8 + MariaDB 10.11.
+            // MariaDB doesn't ship BIN_TO_UUID — that's MySQL 8-only.
             $stmt = $conn->prepare(<<<'SQL'
                 SELECT
-                    BIN_TO_UUID(p.id) AS prediction_id,
-                    BIN_TO_UUID(p.user_id) AS user_id,
+                    HEX(p.id) AS prediction_id_hex,
+                    HEX(p.user_id) AS user_id_hex,
                     ST_Distance_Sphere(POINT(p.lng, p.lat), POINT(:lng, :lat)) / 1000.0 AS distance_km
                 FROM predictions p
                 WHERE p.round_id = :round_id
@@ -84,35 +86,39 @@ final class ResolveRoundService
                 $rawScore = 1.0 / (1.0 + $dKm);
                 $sumRaw += $rawScore;
                 $scored[] = [
-                    'prediction_id' => $row['prediction_id'],
-                    'user_id'       => $row['user_id'],
-                    'distance_km'   => $dKm,
-                    'raw_score'     => $rawScore,
+                    'prediction_id_hex' => $row['prediction_id_hex'],
+                    'user_id_hex'       => $row['user_id_hex'],
+                    'distance_km'       => $dKm,
+                    'raw_score'         => $rawScore,
                 ];
             }
             $pool = $round->getPoolCredits();
 
-            // Persist per-prediction + per-user updates row by row through
-            // bulk UPDATE statements. With the volumes the spec anticipates
-            // (~300 players/round) this is in the noise compared to setting
-            // up + tearing down a Doctrine UnitOfWork for 300 entities.
+            // Persist per-prediction + per-user updates row by row. With the
+            // volumes the spec anticipates (~300 players/round) this is in
+            // the noise compared to setting up + tearing down a Doctrine
+            // UnitOfWork for 300 entities.
             $rows = [];
             $rank = 1;
             foreach ($scored as $row) {
                 $payout = $sumRaw > 0 ? (int) floor($pool * $row['raw_score'] / $sumRaw) : 0;
 
                 $conn->executeStatement(
-                    'UPDATE predictions SET distance_km = :d, `rank` = :r, payout = :p WHERE id = UUID_TO_BIN(:id)',
-                    ['d' => $row['distance_km'], 'r' => $rank, 'p' => $payout, 'id' => $row['prediction_id']],
+                    'UPDATE predictions SET distance_km = :d, `rank` = :r, payout = :p WHERE id = UNHEX(:id_hex)',
+                    ['d' => $row['distance_km'], 'r' => $rank, 'p' => $payout, 'id_hex' => $row['prediction_id_hex']],
                 );
                 $conn->executeStatement(
-                    'UPDATE users SET credits_balance = credits_balance + :p, total_score = total_score + :s, games_played = games_played + 1 WHERE id = UUID_TO_BIN(:id)',
-                    ['p' => $payout, 's' => $row['raw_score'], 'id' => $row['user_id']],
+                    'UPDATE users SET credits_balance = credits_balance + :p, total_score = total_score + :s, games_played = games_played + 1 WHERE id = UNHEX(:id_hex)',
+                    ['p' => $payout, 's' => $row['raw_score'], 'id_hex' => $row['user_id_hex']],
                 );
 
+                // Convert binary id (hex form) → Symfony ULID base32 for JSON.
+                $predictionUlid = \Symfony\Component\Uid\Ulid::fromBinary(hex2bin($row['prediction_id_hex']));
+                $userUlid = \Symfony\Component\Uid\Ulid::fromBinary(hex2bin($row['user_id_hex']));
+
                 $rows[] = [
-                    'predictionId' => $row['prediction_id'],
-                    'userId'       => $row['user_id'],
+                    'predictionId' => (string) $predictionUlid,
+                    'userId'       => (string) $userUlid,
                     'distanceKm'   => $row['distance_km'],
                     'rawScore'     => $row['raw_score'],
                     'rank'         => $rank,
