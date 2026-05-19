@@ -6,14 +6,16 @@ export type LeaderboardRow = {
   rank: number;
   wallet: string;
   handle: string;
-  country: string;
+  /** Optional — mock has it, API doesn't (yet). */
+  country?: string;
   gamesPlayed: number;
-  avgDistanceKm: number;
+  /** Optional — mock has it, API doesn't (would require per-user AVG query). */
+  avgDistanceKm?: number;
   totalCredits: number;
   totalScore: number;
   isMe?: boolean;
-  // Last 5 pin locations for the hover overlay
-  recentPins: LngLat[];
+  /** Optional — only present in mock (drives the hover ghost-pin overlay). */
+  recentPins?: LngLat[];
 };
 
 // Deterministic seeded RNG (mulberry32) so SSR + client produce identical data

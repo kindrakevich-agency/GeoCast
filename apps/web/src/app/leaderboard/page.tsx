@@ -5,7 +5,14 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LeaderboardMap } from "@/components/leaderboard/LeaderboardMap";
-import { leaderboardData, type LeaderboardPeriod, type LeaderboardRow } from "@/lib/leaderboard-mock";
+import { useLeaderboard } from "@/hooks/useLeaderboard";
+import type { ApiLeaderboardRow } from "@/lib/api/types";
+import {
+  leaderboardData,
+  type LeaderboardPeriod,
+  type LeaderboardRow,
+} from "@/lib/leaderboard-mock";
+import { shortWallet } from "@/lib/mock";
 
 const TABS: Array<{ id: LeaderboardPeriod; label: string }> = [
   { id: "today", label: "Today" },
@@ -13,17 +20,42 @@ const TABS: Array<{ id: LeaderboardPeriod; label: string }> = [
   { id: "all", label: "All-time" },
 ];
 
+/**
+ * API rows lack handle / country / avgDistanceKm / recentPins. Map them
+ * onto the existing display shape so the same row component renders both.
+ */
+function apiToDisplay(r: ApiLeaderboardRow): LeaderboardRow {
+  return {
+    rank: r.rank,
+    wallet: r.wallet,
+    handle: shortWallet(r.wallet),
+    gamesPlayed: r.gamesPlayed,
+    totalCredits: r.totalCredits,
+    totalScore: r.totalScore,
+    isMe: r.isMe,
+  };
+}
+
 export default function LeaderboardPage() {
   const [period, setPeriod] = useState<LeaderboardPeriod>("all");
   const [hover, setHover] = useState<LeaderboardRow | null>(null);
 
-  const rows = leaderboardData[period];
+  const api = useLeaderboard(period);
+
+  // Strategy: if the API has rows for this period, show them. Otherwise
+  // fall back to the rich mock so the page never looks empty pre-launch.
+  const usingApi = api.rows.length > 0;
+  const rows: LeaderboardRow[] = useMemo(
+    () => (usingApi ? api.rows.map(apiToDisplay) : leaderboardData[period]),
+    [usingApi, api.rows, period],
+  );
+
   const me = useMemo(() => rows.find((r) => r.isMe) ?? null, [rows]);
   const meOutsideTop100 = me && me.rank > 100;
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[var(--color-bg)] scanlines">
-      <LeaderboardMap hoverPins={hover ? hover.recentPins : null} />
+      <LeaderboardMap hoverPins={hover?.recentPins ?? null} />
 
       <Link
         href="/rounds/demo"
@@ -52,7 +84,7 @@ export default function LeaderboardPage() {
                 {TABS.find((t) => t.id === period)?.label}
               </h1>
               <p className="text-xs text-[var(--color-text-muted)]">
-                top {rows.length} explorers
+                top {rows.length} explorer{rows.length === 1 ? "" : "s"}
               </p>
             </div>
 
@@ -86,17 +118,23 @@ export default function LeaderboardPage() {
 
           {/* Scrollable list */}
           <div className="flex-1 overflow-y-auto px-3 pb-4 sm:px-4">
-            <ul className="space-y-0.5">
-              {rows.map((row) => (
-                <LeaderboardRowItem
-                  key={row.rank}
-                  row={row}
-                  onHover={() => setHover(row)}
-                  onLeave={() => setHover(null)}
-                  hovered={hover?.rank === row.rank}
-                />
-              ))}
-            </ul>
+            {api.isLoading && !usingApi ? (
+              <p className="px-2 py-3 text-xs text-[var(--color-text-muted)]">
+                Loading leaderboard…
+              </p>
+            ) : (
+              <ul className="space-y-0.5">
+                {rows.map((row) => (
+                  <LeaderboardRowItem
+                    key={`${row.rank}-${row.wallet}`}
+                    row={row}
+                    onHover={() => setHover(row)}
+                    onLeave={() => setHover(null)}
+                    hovered={hover?.rank === row.rank}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Sticky "you" row if outside top 100 */}
@@ -111,6 +149,15 @@ export default function LeaderboardPage() {
               />
             </div>
           )}
+
+          {/* Source-of-truth indicator */}
+          <div className="border-t border-[var(--color-border)] px-6 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[9px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] sm:px-7">
+            {api.isLoading
+              ? "loading…"
+              : usingApi
+              ? `live · ${api.rows.length} rows from /api/leaderboard`
+              : "mock data"}
+          </div>
         </GlassPanel>
       </motion.aside>
     </main>
@@ -162,9 +209,11 @@ function LeaderboardRowItem({
         <span className={`truncate text-sm ${row.isMe ? "font-medium" : ""}`}>
           {row.isMe ? "You" : row.handle}
         </span>
-        <span className="hidden font-[family-name:var(--font-jetbrains-mono)] text-[9px] text-[var(--color-text-muted)] sm:inline">
-          {row.country}
-        </span>
+        {row.country && (
+          <span className="hidden font-[family-name:var(--font-jetbrains-mono)] text-[9px] text-[var(--color-text-muted)] sm:inline">
+            {row.country}
+          </span>
+        )}
         {sticky && (
           <span className="ml-auto text-[9px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
             your rank
@@ -173,7 +222,11 @@ function LeaderboardRowItem({
       </span>
 
       <span className="text-right font-[family-name:var(--font-jetbrains-mono)] text-xs tabular-nums text-[var(--color-text-muted)]">
-        {row.avgDistanceKm < 100 ? row.avgDistanceKm.toFixed(1) : Math.round(row.avgDistanceKm)}
+        {row.avgDistanceKm === undefined
+          ? "—"
+          : row.avgDistanceKm < 100
+          ? row.avgDistanceKm.toFixed(1)
+          : Math.round(row.avgDistanceKm)}
       </span>
 
       <span

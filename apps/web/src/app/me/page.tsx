@@ -8,22 +8,37 @@ import { CareerHeatmap } from "@/components/profile/CareerHeatmap";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { RecentRoundCard } from "@/components/profile/RecentRoundCard";
 import { StatCard } from "@/components/profile/StatCard";
+import { useMe } from "@/hooks/useMe";
 import { careerPins, myStats, recentRounds } from "@/lib/profile-mock";
 import { shortWallet } from "@/lib/mock";
 
+/**
+ * Profile page. When a JWT is in storage, /api/me data overlays the
+ * stat-grid fields we have real values for (wallet, gamesPlayed,
+ * creditsBalance, totalScore). The career heatmap + recent rounds
+ * still render from mock data — those endpoints (/api/me/career-pins,
+ * /api/me/predictions) haven't been built yet.
+ *
+ * Unauthenticated → pure mock so the page never looks empty.
+ */
 export default function ProfilePage() {
+  const { user, isAuthed } = useMe();
+
+  const wallet = user?.walletAddress ?? myStats.wallet;
+  const gamesPlayed = user?.gamesPlayed ?? myStats.gamesPlayed;
+  const creditsBalance = user?.creditsBalance ?? myStats.totalCreditsEarned;
+  const totalScore = user?.totalScore ?? myStats.totalScore;
+
   const winRate = (
     (recentRounds.filter((r) => r.rank <= 10).length / recentRounds.length) * 100
   ).toFixed(0);
 
   return (
     <main className="relative min-h-screen w-screen overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] scanlines">
-      {/* Dimmed AmbientMap as background */}
       <div className="fixed inset-0 z-0 opacity-40">
         <AmbientMap />
       </div>
 
-      {/* Top-right "back to round" */}
       <Link
         href="/rounds/demo"
         className="pointer-events-auto fixed right-6 top-6 z-30 rounded-full border border-[var(--color-border)] bg-black/40 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md transition-colors hover:border-[var(--color-cyan)] hover:text-white"
@@ -32,7 +47,6 @@ export default function ProfilePage() {
       </Link>
 
       <div className="relative z-10 mx-auto max-w-5xl px-6 py-12">
-        {/* Header card */}
         <motion.div
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -43,67 +57,69 @@ export default function ProfilePage() {
             className="overflow-hidden rounded-[var(--radius-xl)] p-7 sm:p-9"
           >
             <div className="flex flex-wrap items-center gap-6">
-              <Avatar wallet={myStats.wallet} size={96} />
+              <Avatar wallet={wallet} size={96} />
               <div className="flex-1">
                 <p className="mb-1 text-[10px] uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
-                  Profile · joined round #{myStats.joinedRound}
+                  {isAuthed
+                    ? `Profile · ${user?.isAdmin ? "admin" : "player"}`
+                    : `Profile · joined round #${myStats.joinedRound}`}
                 </p>
                 <h1 className="mb-1 font-[family-name:var(--font-space-grotesk)] text-3xl font-semibold tracking-tight sm:text-4xl">
-                  {myStats.handle}
+                  {isAuthed && user ? "you" : myStats.handle}
                 </h1>
                 <button
                   className="group inline-flex items-center gap-2 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-muted)] transition-colors hover:text-white"
                   title="Click to copy"
+                  onClick={() => navigator.clipboard?.writeText(wallet)}
                 >
-                  {shortWallet(myStats.wallet)}
+                  {shortWallet(wallet)}
                   <CopyIcon />
                 </button>
               </div>
               <div className="hidden text-right sm:block">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-                  All-time rank
+                  {isAuthed ? "Score" : "All-time rank"}
                 </p>
                 <p
                   className="font-[family-name:var(--font-jetbrains-mono)] text-3xl font-bold tabular-nums"
                   style={{ color: "var(--color-cyan)" }}
                 >
-                  #{myStats.allTimeRank}
+                  {isAuthed ? totalScore.toFixed(2) : `#${myStats.allTimeRank}`}
                 </p>
               </div>
             </div>
           </GlassPanel>
         </motion.div>
 
-        {/* 4-stat grid */}
         <motion.div
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
           className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
-          <StatCard label="Games played" value={myStats.gamesPlayed} />
+          <StatCard label="Games played" value={gamesPlayed} />
           <StatCard
             label="Avg distance"
             value={myStats.avgDistanceKm.toFixed(0)}
             unit="km"
             accent="magenta"
+            hint={isAuthed ? "demo data" : undefined}
           />
           <StatCard
             label="Best result"
             value={myStats.bestDistanceKm.toFixed(1)}
             unit="km"
             accent="green"
-            hint={`#${myStats.bestRank} place`}
+            hint={isAuthed ? "demo data" : `#${myStats.bestRank} place`}
           />
           <StatCard
-            label="Credits earned"
-            value={myStats.totalCreditsEarned.toLocaleString()}
+            label={isAuthed ? "Credits" : "Credits earned"}
+            value={creditsBalance.toLocaleString()}
             accent="cyan"
-            hint={`top-10 rate ${winRate}%`}
+            hint={isAuthed ? "live balance" : `top-10 rate ${winRate}%`}
           />
         </motion.div>
 
-        {/* Career heatmap */}
         <motion.section
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -113,7 +129,6 @@ export default function ProfilePage() {
           <CareerHeatmap pins={careerPins} />
         </motion.section>
 
-        {/* Recent rounds */}
         <motion.section
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -131,7 +146,9 @@ export default function ProfilePage() {
         </motion.section>
 
         <p className="mt-10 text-center text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-          {myStats.pinsPerWeek} pins/week · total score {myStats.totalScore.toFixed(2)}
+          {isAuthed
+            ? `live profile · ${user?.walletAddress ? shortWallet(user.walletAddress) : ""}`
+            : `${myStats.pinsPerWeek} pins/week · total score ${myStats.totalScore.toFixed(2)} · (demo data)`}
         </p>
       </div>
     </main>
