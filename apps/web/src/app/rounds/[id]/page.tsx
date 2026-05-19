@@ -11,22 +11,50 @@ import { MapStage } from "@/components/map/MapStage";
 import { QuestionCard } from "@/components/round/QuestionCard";
 import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
+import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { demoPlayers, demoPresence, demoRound, type LngLat } from "@/lib/mock";
 import { rank, withUserPin } from "@/lib/scoring";
 
+/**
+ * Active round screen. Tries to fetch the live round from /api/rounds/current.
+ * Falls back to demoRound mock when the API returns null (no open round) or
+ * errors (which would also be `null` per the hook). The frontend therefore
+ * always has something to render — no blank state.
+ */
 export default function ActiveRoundPage() {
   const [pending, setPending] = useState<LngLat | null>(null);
   const [myPin, setMyPin] = useState<LngLat | null>(null);
   const [resolved, setResolved] = useState(false);
   const placed = myPin !== null;
 
-  const answer = demoRound.answer ?? null;
+  const { round: liveRound, isLoading } = useCurrentRound();
 
+  // Normalize whatever we have into the shape the components expect.
+  // Live round (when present) → use its fields. Otherwise → demo mock.
+  const usingLive = liveRound !== null;
+  const round = liveRound ?? {
+    id: demoRound.id,
+    number: demoRound.number,
+    question: demoRound.question,
+    description: demoRound.description,
+    opensAt: demoRound.opensAt,
+    closesAt: demoRound.closesAt,
+    poolCredits: demoRound.poolCredits,
+    totalParticipants: demoRound.totalParticipants,
+    status: demoRound.status,
+    answer: demoRound.answer ?? null,
+  };
+
+  const answer = round.answer ?? null;
+
+  // For the resolution choreography we still use the rich demoPlayers
+  // dataset since the API doesn't return all-players-in-round for the
+  // anonymous reader (that arrives in a future Pusher event).
   const ranked = useMemo(() => {
     if (!resolved || !myPin || !answer) return null;
     const all = withUserPin(demoPlayers, myPin);
-    return rank(all, answer, demoRound.poolCredits);
-  }, [resolved, myPin, answer]);
+    return rank(all, answer, round.poolCredits || demoRound.poolCredits);
+  }, [resolved, myPin, answer, round.poolCredits]);
 
   const me = ranked?.find((e) => e.isMe) ?? null;
   const myDistance = me?.distanceKm ?? 0;
@@ -59,11 +87,11 @@ export default function ActiveRoundPage() {
       <TopBar wallet="0x7f4c…a3b1" balance={placed ? 99 + myPayout : 100} />
 
       <QuestionCard
-        question={demoRound.question}
-        closesAt={demoRound.closesAt}
-        participants={demoRound.totalParticipants}
-        pool={demoRound.poolCredits}
-        roundNumber={demoRound.number}
+        question={round.question}
+        closesAt={round.closesAt}
+        participants={round.totalParticipants || demoRound.totalParticipants}
+        pool={round.poolCredits || demoRound.poolCredits}
+        roundNumber={round.number}
         status={resolved ? "resolved" : "open"}
       />
 
@@ -71,7 +99,7 @@ export default function ActiveRoundPage() {
         <SidePanel
           open={placed}
           myPin={myPin}
-          participants={demoRound.totalParticipants}
+          participants={round.totalParticipants || demoRound.totalParticipants}
           players={demoPlayers}
         />
       )}
@@ -98,7 +126,14 @@ export default function ActiveRoundPage() {
 
       {resolved && <ClaimBar payout={myPayout} />}
 
-      {/* Dev-only trigger — wire to a real /resolve action once the API lands. */}
+      {/* Source-of-truth indicator — discreet, dev-only signal that the
+          page is reading live data vs the local mock. */}
+      <div className="pointer-events-none fixed bottom-2 left-2 z-50 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-50">
+        {isLoading ? "loading…" : usingLive ? `api · round #${round.number}` : "mock data"}
+      </div>
+
+      {/* Dev-only trigger — wire to a real /resolve action once the
+          admin endpoints land on the frontend. */}
       {placed && !resolved && (
         <button
           onClick={() => setResolved(true)}
