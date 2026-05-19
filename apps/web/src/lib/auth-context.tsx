@@ -110,13 +110,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { signMessageAsync } = useSignMessage();
   const { disconnect } = useDisconnect();
 
-  const [user, setUser] = useState<ApiUser | null>(loadSessionUser);
+  // Start NULL on both server and client to keep the initial render byte-for-byte
+  // identical (React error #418 = hydration mismatch). The cached sessionStorage
+  // user is loaded after mount so it doesn't affect the SSR'd HTML.
+  const [user, setUser] = useState<ApiUser | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Hydrate user from /api/me if we have a JWT but no session-cached user.
+  // Post-mount hydration: first try the sessionStorage cache (cheap, instant).
+  // If empty and a JWT is present, fetch /api/me. Either path sets `user` once,
+  // which triggers a re-render with real data — never during initial hydration.
   useEffect(() => {
-    if (user !== null) return;
+    const cached = loadSessionUser();
+    if (cached) {
+      setUser(cached);
+      return;
+    }
     if (!getStoredToken()) return;
 
     let cancelled = false;
@@ -134,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, []);
 
   const signIn = useCallback(async () => {
     if (!isConnected || !address) {
