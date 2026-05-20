@@ -58,6 +58,7 @@ export default function Home() {
         <ScoringSection />
         <StatsSection />
         <FinalCTASection onSignedIn={onSignedIn} />
+        <SeoSection />
         <Footer />
       </div>
     </main>
@@ -422,6 +423,175 @@ function FinalCTASection({ onSignedIn }: { onSignedIn: () => void }) {
           </p>
         </GlassPanel>
       </motion.div>
+    </section>
+  );
+}
+
+// -------------------- SEO copy --------------------
+//
+// Long-form prose for search engines (and curious humans). Lives above the
+// footer, visually muted so it doesn't compete with the cinematic top of the
+// page. Each FAQ item is also serialised into the JSON-LD FAQPage schema at
+// the bottom of the section — Google reads that and may render rich-result
+// accordions in SERPs.
+
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "What is GeoCast?",
+    a: "GeoCast is a daily geo-prediction game. Every round we publish one question — \"Where will the next M5+ earthquake strike?\", \"Where will tomorrow's hottest city be?\" — and every player drops a single pin on a world map. After the round closes, the real location is revealed and players are ranked by haversine distance. The closest pin takes the biggest share of the pool, but even far-away guesses earn a sliver: scoring is inverse-distance, not winner-takes-all.",
+  },
+  {
+    q: "Is GeoCast free to play?",
+    a: "Yes. New accounts start with 100 in-game credits and each pin costs one credit. There are no top-ups, no purchases, and no subscriptions. The on-chain mode uses test USDC on Base Sepolia for portfolio demos; the production game is free.",
+  },
+  {
+    q: "Do I need a crypto wallet?",
+    a: "Yes — GeoCast uses Sign-In with Ethereum (SIWE, EIP-4361) for authentication. There is no email, no password, and no tracking. Your wallet address is your account. Any EVM-compatible wallet works: MetaMask, Rabby, Coinbase Wallet, Rainbow, or any WalletConnect-compatible wallet on desktop or mobile.",
+  },
+  {
+    q: "How are pin distances calculated?",
+    a: "Using the haversine formula on a sphere of radius 6,371 km — the standard great-circle distance between two latitude/longitude points. The math runs server-side in MariaDB via ST_Distance_Sphere on indexed SPATIAL POINT columns, so ranking thousands of pins on round resolution is sub-second.",
+  },
+  {
+    q: "How is the prize pool split?",
+    a: "Each prediction earns a raw score of 1 / (1 + distance_km). Your payout is your share of the round pool: floor(pool × your_raw_score ÷ sum_of_raw_scores). This long-tail curve guarantees that the closest pin always wins the biggest share, while still rewarding casual players who weren't quite right — no zero-sum trap.",
+  },
+  {
+    q: "Is GeoCast a prediction market?",
+    a: "No. GeoCast is a geo-prediction game, not a regulated prediction market. There are no derivatives, no shares, and no real-money speculation in the live product. The pool is split pro-rata by accuracy of a geographic guess, not by buying contracts against an outcome. The optional on-chain mode is testnet-only and exists to demonstrate the architecture for a senior full-stack portfolio.",
+  },
+  {
+    q: "What does the leaderboard show?",
+    a: "Three rankings — today, this week, and all-time — sourced from a Redis sorted set so reads stay sub-millisecond even with thousands of players. The all-time score is the cumulative sum of raw scores across every resolved round you've played: distance-weighted, so consistent close guesses beat one lucky hit.",
+  },
+  {
+    q: "Who builds GeoCast?",
+    a: "GeoCast is built solo by Vitalii Kindrakevych (kindrakevich-agency) as a senior full-stack portfolio piece. Stack: Next.js 16 + Tailwind 4 + MapLibre + wagmi on the front; Symfony 7.4 + API Platform + MariaDB SPATIAL + Predis on the back; Pusher Channels for real-time presence; Foundry + OpenZeppelin contracts for the optional on-chain pool on Base. Source is open at github.com/kindrakevich-agency/GeoCast.",
+  },
+];
+
+function SeoSection() {
+  // JSON-LD FAQPage schema — gives Google enough structure to render rich
+  // accordion results. Same content as the visible FAQ; one source of truth.
+  const ldFaq = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+
+  const ldWebsite = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "GeoCast",
+    url: "https://geocast.games",
+    description:
+      "Daily geo-prediction game. Drop a pin on a world map; closest guess wins the round pool.",
+    inLanguage: "en",
+  };
+
+  const ldOrg = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "GeoCast",
+    url: "https://geocast.games",
+    sameAs: ["https://github.com/kindrakevich-agency/GeoCast"],
+  };
+
+  return (
+    <section className="relative w-full px-6 py-16 sm:py-20" aria-label="About GeoCast">
+      <div className="mx-auto max-w-4xl">
+        <SectionEyebrow>About</SectionEyebrow>
+        <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.5rem,3.4vw,2.1rem)] font-semibold leading-tight tracking-tight">
+          The world's only{" "}
+          <span style={{ color: "var(--color-cyan)" }}>daily geo-prediction game</span>.
+        </h2>
+
+        <div className="space-y-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
+          <p>
+            GeoCast asks one question per day — about earthquakes, weather, headlines,
+            elections, sport, anything that pins to a place on Earth — and gives every
+            player exactly one pin on a world map to commit their answer. Twenty-four
+            hours later the truth is revealed and a haversine-ranked leaderboard
+            settles the round. The closest pin earns the biggest share of the pool,
+            but even a 2,000 km miss still pays a sliver: scoring is inverse-distance,
+            engagement-friendly, and never zero-sum.
+          </p>
+          <p>
+            The whole canvas is a full-screen MapLibre vector map (Carto Dark Matter
+            tiles, no API key required), with glassmorphic panels floating on top.
+            Sign in with your Ethereum wallet (SIWE, EIP-4361) — no email, no
+            password, no tracking — and your address is your account. Real-time
+            presence dots show other players' cursors as they hover the map; pin
+            placements broadcast over Pusher to every connected viewer. When the
+            admin (or a future oracle) drops the answer pin, a great-circle line
+            draws from your pin to the truth and your distance badge pulses in.
+          </p>
+          <p>
+            Built solo as a portfolio piece for the senior full-stack surface:
+            Next.js 16 App Router + Tailwind 4 + MapLibre + Framer Motion on the
+            front; Symfony 7.4 + API Platform 4 + Doctrine ORM + MariaDB SPATIAL
+            POINT + Predis on the back; Pusher Channels for real-time; Foundry +
+            OpenZeppelin contracts on Base for the optional on-chain pool.
+            Dockerised end-to-end, deployable to a single Hetzner box with one
+            command. Source is open at{" "}
+            <a
+              href="https://github.com/kindrakevich-agency/GeoCast"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-cyan)] underline-offset-4 hover:underline"
+            >
+              github.com/kindrakevich-agency/GeoCast
+            </a>
+            .
+          </p>
+        </div>
+
+        <h3 className="mt-12 mb-5 font-[family-name:var(--font-space-grotesk)] text-lg font-semibold tracking-tight text-[var(--color-text)]">
+          Frequently asked questions
+        </h3>
+
+        <div className="space-y-3">
+          {FAQ.map((item) => (
+            <details
+              key={item.q}
+              className="group rounded-md border border-[var(--color-border)] bg-black/20 px-5 py-4 backdrop-blur-md transition-colors hover:border-[var(--color-cyan)]"
+            >
+              <summary className="cursor-pointer list-none font-[family-name:var(--font-space-grotesk)] text-sm font-medium text-[var(--color-text)] [&::-webkit-details-marker]:hidden">
+                <span className="mr-3 inline-block text-[var(--color-cyan)] transition-transform group-open:rotate-90">
+                  ▸
+                </span>
+                {item.q}
+              </summary>
+              <p className="mt-3 pl-6 text-sm leading-relaxed text-[var(--color-text-muted)]">
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </div>
+
+        <p className="mt-10 text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-50">
+          keywords: geo prediction game · daily map game · pin-drop game ·
+          haversine ranking · web3 prediction game · siwe game · MapLibre game
+        </p>
+      </div>
+
+      {/* JSON-LD structured data — invisible to humans, valuable to Google */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldWebsite) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldOrg) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ldFaq) }}
+      />
     </section>
   );
 }
