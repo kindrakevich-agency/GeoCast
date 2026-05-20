@@ -82,6 +82,20 @@ export type ApiLeaderboardResponse = {
   me: ApiLeaderboardMe | null;
 };
 
+export type ApiAdminRound = ApiRound;
+
+export type ApiResolveResponse = {
+  round: ApiRound;
+  rankings: Array<{
+    predictionId: string;
+    userId: string;
+    distanceKm: number;
+    rank: number;
+    payout: number;
+    rawScore: number;
+  }>;
+};
+
 export type ApiCareerPin = {
   lng: number;
   lat: number;

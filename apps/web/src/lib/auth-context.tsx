@@ -118,15 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Post-mount hydration: first try the sessionStorage cache (cheap, instant).
-  // If empty and a JWT is present, fetch /api/me. Either path sets `user` once,
-  // which triggers a re-render with real data — never during initial hydration.
+  // Post-mount hydration: cached sessionStorage user paints instantly
+  // (no flash), then a background /api/me refetch overwrites it with the
+  // latest server-side fields (credits_balance, games_played, total_score,
+  // is_admin). Without the refetch, gamesPlayed could stay stuck at the
+  // value it had on sign-in even after the user played more rounds.
   useEffect(() => {
     const cached = loadSessionUser();
-    if (cached) {
-      setUser(cached);
-      return;
-    }
+    if (cached) setUser(cached);
     if (!getValidToken()) return;
 
     let cancelled = false;
@@ -138,7 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeSessionUser(me);
         }
       } catch {
-        clearToken();
+        // 401 already auto-cleared the token in apiFetch; keep the cached
+        // user visible until the auth-cleared event listener resets it.
       }
     })();
     return () => {

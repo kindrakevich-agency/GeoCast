@@ -30,6 +30,22 @@ final class AdminRoundsController
     }
 
     /**
+     * GET /api/admin/rounds
+     *
+     * Lists every round, newest first — drives the admin dashboard.
+     */
+    #[Route('/admin/rounds', name: 'api_admin_rounds_list', methods: ['GET'])]
+    public function list(): JsonResponse
+    {
+        $rounds = $this->repo->createQueryBuilder('r')
+            ->orderBy('r.number', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        return new JsonResponse(array_map(fn(Round $r) => $this->serialize($r), $rounds));
+    }
+
+    /**
      * POST /api/admin/rounds
      *
      * Body: { question, description?, opensAt (ISO), closesAt (ISO) }
