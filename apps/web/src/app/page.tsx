@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { AmbientMap } from "@/components/map/AmbientMap";
 import { ConnectWalletButton } from "@/components/auth/ConnectWalletButton";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { Typewriter } from "@/components/ui/Typewriter";
 import { landingStats as mockStats } from "@/lib/landing-pins";
 import { useAuth } from "@/hooks/useAuth";
 import { useStats } from "@/hooks/useStats";
@@ -154,16 +155,39 @@ const STEPS = [
   },
 ];
 
+const EXAMPLE_QUESTIONS = [
+  "Where will the hottest European capital be tomorrow?",
+  "Where will the next M5+ earthquake strike?",
+  "Where will the heaviest rainfall fall in next 24h?",
+  "Where will the largest active wildfire be today?",
+  "Where will the strongest wind gust hit a coastal capital?",
+  "Where will today's biggest geo-tagged news event happen?",
+  "Where will the aurora be visible tonight?",
+];
+
 function HowItWorksSection() {
   return (
     <section className="relative w-full px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl">
         <SectionEyebrow>How it works</SectionEyebrow>
-        <h2 className="mb-12 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
+        <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
           One question per day.{" "}
           <span style={{ color: "var(--color-cyan)" }}>One pin.</span>{" "}
           <span style={{ color: "var(--color-magenta)" }}>One chance.</span>
         </h2>
+
+        {/* Typewriter — cycles through example questions so visitors get
+            a tangible feel for what "one question per day" looks like. */}
+        <div className="mb-12 max-w-3xl">
+          <p className="mb-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+            for example —
+          </p>
+          <div className="min-h-[3.5rem] sm:min-h-[3rem]">
+            <p className="font-[family-name:var(--font-space-grotesk)] text-[clamp(1.1rem,2.4vw,1.5rem)] font-medium leading-snug text-[var(--color-text)]">
+              <Typewriter phrases={EXAMPLE_QUESTIONS} />
+            </p>
+          </div>
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((s, i) => (
