@@ -6,8 +6,9 @@ import { motion } from "framer-motion";
 import { AmbientMap } from "@/components/map/AmbientMap";
 import { ConnectWalletButton } from "@/components/auth/ConnectWalletButton";
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { landingStats } from "@/lib/landing-pins";
+import { landingStats as mockStats } from "@/lib/landing-pins";
 import { useAuth } from "@/hooks/useAuth";
+import { useStats } from "@/hooks/useStats";
 
 /**
  * Landing page. Five sections, all over the ambient world map background:
@@ -301,6 +302,16 @@ function ExampleRow({
 // -------------------- Live stats --------------------
 
 function StatsSection() {
+  const { stats } = useStats();
+  // Real data when available; mock as fallback so the page never flashes
+  // a loading shell. The footer subtitle below the cards quietly reveals
+  // which source we're showing.
+  const live = stats !== null;
+  const pinsThisWeek = stats?.pinsThisWeek ?? mockStats.pinsThisWeek;
+  const activeRounds = stats?.activeRounds ?? mockStats.activeRounds;
+  const totalExplorers = stats?.totalExplorers ?? mockStats.totalPlayers;
+  const winner = stats?.lastWinner ?? mockStats.lastWinner;
+
   return (
     <section className="relative w-full px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl">
@@ -311,16 +322,29 @@ function StatsSection() {
         </h2>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatBox label="Pins this week" value={landingStats.pinsThisWeek.toLocaleString()} accent="cyan" />
-          <StatBox label="Active rounds" value={landingStats.activeRounds.toString()} accent="green" />
-          <StatBox label="Total explorers" value={landingStats.totalPlayers.toLocaleString()} accent="magenta" />
-          <StatBox
-            label="Last winner"
-            value={`${landingStats.lastWinner.kmOff} km off`}
-            sub={`${landingStats.lastWinner.wallet} · +${landingStats.lastWinner.payout} cr`}
-            accent="amber"
-          />
+          <StatBox label="Pins this week" value={pinsThisWeek.toLocaleString()} accent="cyan" />
+          <StatBox label="Active rounds" value={activeRounds.toString()} accent="green" />
+          <StatBox label="Total explorers" value={totalExplorers.toLocaleString()} accent="magenta" />
+          {winner ? (
+            <StatBox
+              label="Last winner"
+              value={`${winner.kmOff} km off`}
+              sub={`${winner.wallet} · +${winner.payout} cr`}
+              accent="amber"
+            />
+          ) : (
+            <StatBox
+              label="Last winner"
+              value="—"
+              sub="no resolved rounds yet"
+              accent="amber"
+            />
+          )}
         </div>
+
+        <p className="mt-5 text-center font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-60">
+          {live ? "live · /api/stats" : "loading…"}
+        </p>
       </div>
     </section>
   );

@@ -13,12 +13,21 @@ export type TopBarProps = {
   balance: number;
 };
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  match: (p: string) => boolean;
+  /** When true, only render this entry if useAuth().user.isAdmin === true. */
+  adminOnly?: boolean;
+};
+
+const NAV: NavItem[] = [
   // /play is a server-side redirect to /rounds/{currentRoundId} — keeps the
   // nav URL stable while the visible URL always reflects the real round.
-  { href: "/play", label: "Game", match: (p: string) => p.startsWith("/rounds") || p === "/play" },
-  { href: "/leaderboard", label: "Leaderboard", match: (p: string) => p === "/leaderboard" },
-  { href: "/me", label: "Profile", match: (p: string) => p === "/me" },
+  { href: "/play", label: "Game", match: (p) => p.startsWith("/rounds") || p === "/play" },
+  { href: "/leaderboard", label: "Leaderboard", match: (p) => p === "/leaderboard" },
+  { href: "/me", label: "Profile", match: (p) => p === "/me" },
+  { href: "/admin", label: "Admin", match: (p) => p.startsWith("/admin"), adminOnly: true },
 ];
 
 export function TopBar({ wallet, balance }: TopBarProps) {
@@ -40,13 +49,20 @@ export function TopBar({ wallet, balance }: TopBarProps) {
       </Link>
 
       <nav className="hidden gap-6 text-xs uppercase tracking-[0.18em] md:flex">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !item.adminOnly || user?.isAdmin).map((item) => {
           const active = item.match(pathname);
+          const isAdmin = item.adminOnly === true;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={active ? "text-white" : "text-[var(--color-text-muted)] hover:text-white"}
+              className={
+                isAdmin
+                  ? `${active ? "text-[var(--color-magenta)]" : "text-[var(--color-magenta)]/70"} hover:text-[var(--color-magenta)]`
+                  : active
+                  ? "text-white"
+                  : "text-[var(--color-text-muted)] hover:text-white"
+              }
             >
               {item.label}
             </Link>

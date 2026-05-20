@@ -24,7 +24,7 @@ security:
         # comparing the local user.walletAddress to row.wallet, so the
         # "your rank" highlight survives without the server seeing the JWT.
         api_public:
-            pattern: ^/(auth|health|rounds$|rounds/[^/]+$|leaderboard)
+            pattern: ^/(auth|health|rounds$|rounds/[^/]+$|leaderboard|stats)
             stateless: true
             security: false
 
@@ -44,6 +44,7 @@ security:
         - { path: ^/health, roles: PUBLIC_ACCESS }
         - { path: ^/rounds/current$, roles: PUBLIC_ACCESS }
         - { path: ^/leaderboard, roles: PUBLIC_ACCESS }
+        - { path: ^/stats, roles: PUBLIC_ACCESS }
         # Admin namespace
         - { path: ^/admin, roles: ROLE_ADMIN }
         # Everything else under /api requires a valid JWT (ROLE_USER)

@@ -82,6 +82,17 @@ export type ApiLeaderboardResponse = {
   me: ApiLeaderboardMe | null;
 };
 
+export type ApiStats = {
+  pinsThisWeek: number;
+  activeRounds: number;
+  totalExplorers: number;
+  lastWinner: {
+    wallet: string;       // shortened (0x7f4c…a3b1)
+    kmOff: number;
+    payout: number;
+  } | null;
+};
+
 export type ApiAdminRound = ApiRound;
 
 export type ApiResolveResponse = {
