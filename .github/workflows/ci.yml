@@ -108,6 +108,14 @@ jobs:
       # (the backend's PusherBroadcaster mirrors this no-op pattern).
       NEXT_PUBLIC_PUSHER_KEY:     ${{ secrets.NEXT_PUBLIC_PUSHER_KEY }}
       NEXT_PUBLIC_PUSHER_CLUSTER: ${{ secrets.NEXT_PUBLIC_PUSHER_CLUSTER }}
+      # v2 on-chain (Base Sepolia testnet — phase 1). When POOL_ADDRESS is
+      # zero/unset, isOnchainEnabled() returns false and the wagmi hooks +
+      # ClaimableWinnings UI stay inert. Public-safe values (everyone sees
+      # the contract address anyway); the Alchemy backend RPC + admin
+      # private key are server-only (apps/api/.env.local), never here.
+      NEXT_PUBLIC_GEOCAST_CHAIN_ID:     ${{ secrets.NEXT_PUBLIC_GEOCAST_CHAIN_ID }}
+      NEXT_PUBLIC_GEOCAST_POOL_ADDRESS: ${{ secrets.NEXT_PUBLIC_GEOCAST_POOL_ADDRESS }}
+      NEXT_PUBLIC_GEOCAST_USDC_ADDRESS: ${{ secrets.NEXT_PUBLIC_GEOCAST_USDC_ADDRESS }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.5
@@ -118,7 +126,7 @@ jobs:
           command_timeout: 10m
           # Forward NEXT_PUBLIC_* env vars to the SSH session so the
           # frontend build inside the box can bake them into the bundle.
-          envs: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,NEXT_PUBLIC_PUSHER_KEY,NEXT_PUBLIC_PUSHER_CLUSTER
+          envs: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,NEXT_PUBLIC_PUSHER_KEY,NEXT_PUBLIC_PUSHER_CLUSTER,NEXT_PUBLIC_GEOCAST_CHAIN_ID,NEXT_PUBLIC_GEOCAST_POOL_ADDRESS,NEXT_PUBLIC_GEOCAST_USDC_ADDRESS
           script: |
             set -e
             APP_DIR=/www/wwwroot/geocast.kindrakevich.com
@@ -167,6 +175,9 @@ jobs:
             NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
             NEXT_PUBLIC_PUSHER_KEY="$NEXT_PUBLIC_PUSHER_KEY" \
             NEXT_PUBLIC_PUSHER_CLUSTER="$NEXT_PUBLIC_PUSHER_CLUSTER" \
+            NEXT_PUBLIC_GEOCAST_CHAIN_ID="$NEXT_PUBLIC_GEOCAST_CHAIN_ID" \
+            NEXT_PUBLIC_GEOCAST_POOL_ADDRESS="$NEXT_PUBLIC_GEOCAST_POOL_ADDRESS" \
+            NEXT_PUBLIC_GEOCAST_USDC_ADDRESS="$NEXT_PUBLIC_GEOCAST_USDC_ADDRESS" \
               pnpm --filter ./apps/web build
 
             echo "=== Permissions ==="
