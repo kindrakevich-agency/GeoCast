@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useWriteContract } from "wagmi";
+import { baseSepolia, base } from "viem/chains";
 import type { Hex } from "viem";
 import { geoCastPoolAdminAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
@@ -45,6 +46,8 @@ export function useResolveOnchain(): {
     }) => {
       try {
         setStatus({ phase: "resolving" });
+        // Pin chainId so wagmi prompts a wallet network switch if needed.
+        const targetChain = cfg.chainId === base.id ? base.id : baseSepolia.id;
         const txHash = await writeContractAsync({
           address: cfg.poolAddress,
           abi: geoCastPoolAdminAbi,
@@ -55,6 +58,7 @@ export function useResolveOnchain(): {
             toScaledInt32(answerLng),
             merkleRoot,
           ],
+          chainId: targetChain,
         });
         setStatus({ phase: "done", txHash });
       } catch (e) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useWriteContract } from "wagmi";
+import { baseSepolia, base } from "viem/chains";
 import type { Hex } from "viem";
 import { geoCastPoolAdminAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
@@ -47,6 +48,11 @@ export function useCreateRound(): {
     }) => {
       try {
         setStatus({ phase: "creating" });
+        // Pin to the configured chain so wagmi prompts the user to switch
+        // networks in their wallet if they're on a different one. Without
+        // this, MetaMask would send the tx to the currently-connected chain
+        // (e.g. Ethereum mainnet) where the contract doesn't exist.
+        const targetChain = cfg.chainId === base.id ? base.id : baseSepolia.id;
         const txHash = await writeContractAsync({
           address: cfg.poolAddress,
           abi: geoCastPoolAdminAbi,
@@ -57,6 +63,7 @@ export function useCreateRound(): {
             BigInt(closesAt),
             BigInt(revealsAt),
           ],
+          chainId: targetChain,
         });
         setStatus({ phase: "done", txHash });
       } catch (e) {
