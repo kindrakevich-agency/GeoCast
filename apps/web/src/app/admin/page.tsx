@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -445,6 +446,7 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
 
 function CreateRoundButton({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -452,6 +454,10 @@ function CreateRoundButton({ onCreated }: { onCreated: () => void }) {
   // Default window: opens now+5min, closes in 24h.
   const [opensAt, setOpensAt] = useState(() => isoLocal(new Date(Date.now() + 5 * 60 * 1000)));
   const [closesAt, setClosesAt] = useState(() => isoLocal(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+
+  // createPortal needs document.body — available only client-side. Toggling
+  // a mount flag after first render gates the portal until then.
+  useEffect(() => setMounted(true), []);
 
   const submit = async () => {
     setSubmitting(true);
@@ -475,26 +481,22 @@ function CreateRoundButton({ onCreated }: { onCreated: () => void }) {
     }
   };
 
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-full border border-[var(--color-cyan)] px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)] hover:bg-[var(--color-cyan)] hover:text-[var(--color-bg)]"
+  // Portaled into document.body so the modal escapes any stacking context
+  // created by the MapLibre canvas (which is the entire reason the popup
+  // was rendering BEHIND the map before).
+  const modal = open && mounted ? createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="fixed inset-0 z-[1000] grid place-items-center bg-black/70 backdrop-blur-md"
+      style={{ zIndex: 1000 }}
+      onClick={() => setOpen(false)}
+    >
+      <GlassPanel
+        variant="strong"
+        className="w-[min(560px,calc(100%-2rem))] space-y-4 p-6"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
-        + new round
-      </button>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-md"
-          onClick={() => setOpen(false)}
-        >
-          <GlassPanel
-            variant="strong"
-            className="w-[min(560px,calc(100%-2rem))] space-y-4 p-6"
-            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          >
             <h3 className="font-[family-name:var(--font-space-grotesk)] text-lg font-semibold">
               Create round
             </h3>
@@ -550,9 +552,20 @@ function CreateRoundButton({ onCreated }: { onCreated: () => void }) {
               </button>
             </div>
             {error && <p className="text-xs text-[var(--color-magenta)]">{error}</p>}
-          </GlassPanel>
-        </motion.div>
-      )}
+      </GlassPanel>
+    </motion.div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-full border border-[var(--color-cyan)] px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)] hover:bg-[var(--color-cyan)] hover:text-[var(--color-bg)]"
+      >
+        + new round
+      </button>
+      {modal}
     </>
   );
 }

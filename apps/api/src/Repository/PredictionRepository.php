@@ -26,6 +26,28 @@ final class PredictionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Anonymized pin coordinates for the round's heatmap. Returns just
+     * {lat, lng} pairs — no user ids, no wallets — so callers can show
+     * the aggregate without leaking who placed where.
+     *
+     * @return list<array{lat: float, lng: float}>
+     */
+    public function findAnonymizedPinsForRound(Round $round): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select('p.lat AS lat', 'p.lng AS lng')
+            ->where('p.round = :round')
+            ->setParameter('round', $round)
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_map(static fn(array $r) => [
+            'lat' => (float) $r['lat'],
+            'lng' => (float) $r['lng'],
+        ], $rows);
+    }
+
+    /**
      * @return Prediction[] sorted by distance ascending (best first)
      */
     public function findRankedForRound(Round $round): array

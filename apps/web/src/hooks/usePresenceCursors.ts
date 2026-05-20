@@ -14,6 +14,12 @@ export type PeerCursor = {
   updatedAt: number;
 };
 
+export type PresencePeer = {
+  userId: string;
+  wallet: string;
+  isAdmin: boolean;
+};
+
 export type PresenceState = {
   /** True once pusher:subscription_succeeded has fired. */
   ready: boolean;
@@ -21,6 +27,9 @@ export type PresenceState = {
   memberCount: number;
   /** Other users' cursors, keyed by user_id. Excludes the local user. */
   cursors: Record<string, PeerCursor>;
+  /** All peers currently subscribed to the channel (excluding local user).
+   *  Drives the SidePanel's "watching now" list — real wallets, no mocks. */
+  peers: PresencePeer[];
 };
 
 /** Throttle window for cursor broadcasts. Pusher's free tier caps client
@@ -49,6 +58,7 @@ export function usePresenceCursors(
     ready: false,
     memberCount: 0,
     cursors: {},
+    peers: [],
   });
 
   useEffect(() => {
@@ -64,27 +74,58 @@ export function usePresenceCursors(
     let lastSentLng = NaN;
     let lastSentLat = NaN;
 
+    type MemberInfo = { wallet?: string; isAdmin?: boolean };
+
+    const buildPeers = (members: Members, mineId: string | null): PresencePeer[] => {
+      const list: PresencePeer[] = [];
+      members.each((m: { id: string; info: MemberInfo }) => {
+        if (m.id === mineId) return;
+        list.push({
+          userId: m.id,
+          wallet: m.info?.wallet ?? "0x…",
+          isAdmin: m.info?.isAdmin === true,
+        });
+      });
+      return list;
+    };
+
     const onSubscribed = (members: Members) => {
       myUserId = members.myID;
       setState((s) => ({
         ...s,
         ready: true,
         memberCount: members.count,
+        peers: buildPeers(members, myUserId),
       }));
     };
 
-    const onMemberAdded = () => {
-      setState((s) => ({ ...s, memberCount: s.memberCount + 1 }));
+    const onMemberAdded = (member: { id: string; info?: MemberInfo }) => {
+      setState((s) => ({
+        ...s,
+        memberCount: s.memberCount + 1,
+        peers:
+          member.id === myUserId
+            ? s.peers
+            : [
+                ...s.peers,
+                {
+                  userId: member.id,
+                  wallet: member.info?.wallet ?? "0x…",
+                  isAdmin: member.info?.isAdmin === true,
+                },
+              ],
+      }));
     };
 
     const onMemberRemoved = (member: { id: string }) => {
       setState((s) => {
-        const next = { ...s.cursors };
-        delete next[member.id];
+        const nextCursors = { ...s.cursors };
+        delete nextCursors[member.id];
         return {
           ...s,
           memberCount: Math.max(0, s.memberCount - 1),
-          cursors: next,
+          cursors: nextCursors,
+          peers: s.peers.filter((p) => p.userId !== member.id),
         };
       });
     };
@@ -148,7 +189,7 @@ export function usePresenceCursors(
       channel.unbind("pusher:member_removed", onMemberRemoved);
       channel.unbind("client-cursor-move", onCursorMove);
       pusher.unsubscribe(channelName);
-      setState({ ready: false, memberCount: 0, cursors: {} });
+      setState({ ready: false, memberCount: 0, cursors: {}, peers: [] });
     };
   }, [roundId, localCursorRef]);
 

@@ -17,10 +17,10 @@ import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
 import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
+import { useRoundPins } from "@/hooks/useRoundPins";
 import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
 import type { ApiPlacePredictionResponse, ApiPrediction } from "@/lib/api/types";
-import { demoPlayers, demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
-import { rank, withUserPin } from "@/lib/scoring";
+import { demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
 
 /**
  * Active round screen.
@@ -61,6 +61,7 @@ export default function ActiveRoundPage() {
   // so the hook never ran. Inlining keeps it in the page's own chunk.
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [predictionFetchBump, setPredictionFetchBump] = useState(0);
+  const [persistedPrediction, setPersistedPrediction] = useState<ApiPrediction | null>(null);
   const refetchMyPrediction = () => setPredictionFetchBump((n) => n + 1);
 
   useEffect(() => {
@@ -79,8 +80,12 @@ export default function ActiveRoundPage() {
           { signal: ctrl.signal },
         );
         if (cancelled || !data) return;
-        // Only hydrate if we don't already have a local pin (avoids
-        // clobbering a just-placed pin with the same coords).
+        // Persist the full prediction (lat/lng plus distanceKm/rank/payout
+        // once the round has resolved) so post-resolution UI can render
+        // the user's actual result.
+        setPersistedPrediction(data);
+        // Only hydrate myPin if we don't already have a local one — avoids
+        // clobbering a just-placed pin.
         setMyPin((prev) => prev ?? { lat: data.lat, lng: data.lng });
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -130,7 +135,18 @@ export default function ActiveRoundPage() {
   const presenceRoundId = usingLive && isAuthed && !resolved ? round.id : null;
 
   const localCursorRef = useRef<LngLat | null>(null);
-  const { memberCount, cursors } = usePresenceCursors(presenceRoundId, localCursorRef);
+  const { memberCount, cursors, peers } = usePresenceCursors(presenceRoundId, localCursorRef);
+
+  // Anonymized pin coordinates for the round — drives the heatmap + dot
+  // markers on the map. Server returns [] for open rounds where the
+  // caller hasn't placed yet, so visiting before commitment shows a clean
+  // map. `pinFetchKey` bumps after our own placement so the heatmap
+  // includes our pin (and everyone else's that arrived during the page life).
+  const [pinFetchKey, setPinFetchKey] = useState(0);
+  const { pins: roundPins } = useRoundPins(
+    usingLive ? round.id : null,
+    pinFetchKey,
+  );
 
   const displayPool = livePool ?? (round.poolCredits || demoRound.poolCredits);
   const predictionCount =
@@ -157,6 +173,9 @@ export default function ActiveRoundPage() {
       const d = data as { count?: number; pool?: number };
       if (typeof d.count === "number") setLiveParticipants(d.count);
       if (typeof d.pool === "number") setLivePool(d.pool);
+      // A new pin landed — refetch the anonymized aggregate so our
+      // heatmap stays in sync with what other tabs are seeing.
+      setPinFetchKey((n) => n + 1);
     },
     "round-resolved": (data) => {
       const d = data as { answer?: { lat: number; lng: number } };
@@ -171,17 +190,31 @@ export default function ActiveRoundPage() {
     },
   });
 
-  const ranked = useMemo(() => {
-    if (!resolved || !myPin || !answer) return null;
-    const all = withUserPin(demoPlayers, myPin);
-    return rank(all, answer, displayPool);
-  }, [resolved, myPin, answer, displayPool]);
-
-  const me = ranked?.find((e) => e.isMe) ?? null;
-  const myDistance = me?.distanceKm ?? 0;
-  const myRank = me?.rank ?? null;
-  const myPayout = me?.payout ?? 0;
+  // Post-resolution metrics come from the user's persisted prediction
+  // record (distanceKm, rank, payout are set during ResolveRoundService).
+  // Until /api/rounds/{id}/results lands as a full ranked endpoint, the
+  // Leaderboard slide-in renders just the user's own row.
+  const myDistance = persistedPrediction?.distanceKm ?? 0;
+  const myRank = persistedPrediction?.rank ?? null;
+  const myPayout = persistedPrediction?.payout ?? 0;
   const top10 = myRank !== null && myRank <= 10;
+  const ranked = useMemo(() => {
+    if (!resolved || !myPin || myRank === null) return null;
+    return [
+      {
+        id: "me",
+        handle: "you",
+        wallet: "you",
+        countryHint: "",
+        pinLocation: myPin,
+        distanceKm: myDistance,
+        rank: myRank,
+        payout: myPayout,
+        rawScore: 1 / (1 + myDistance),
+        isMe: true as const,
+      },
+    ];
+  }, [resolved, myPin, myRank, myDistance, myPayout]);
 
   const onMapClick = (coords: LngLat) => {
     if (placed || submitting) return;
@@ -245,7 +278,7 @@ export default function ActiveRoundPage() {
         myPin={myPin}
         answer={resolved ? answer : null}
         presence={livePresence}
-        players={demoPlayers}
+        pins={roundPins}
         onMapClick={onMapClick}
         onCursorMove={(c) => {
           localCursorRef.current = c;
@@ -267,8 +300,9 @@ export default function ActiveRoundPage() {
         <SidePanel
           open={placed}
           myPin={myPin}
-          participants={displayParticipants}
-          players={demoPlayers}
+          participants={predictionCount}
+          watching={memberCount}
+          peers={peers}
         />
       )}
 

@@ -44,6 +44,59 @@ final class RoundsController
     }
 
     /**
+     * GET /api/rounds/{id}/pins
+     *
+     * Anonymized list of {lat, lng} for the round's heatmap. Visibility
+     * follows the spec:
+     *   - status=resolved or closed → all pins
+     *   - status=open + caller authed + has placed a pin → all OTHER pins
+     *   - status=open + not placed (or anonymous)              → empty
+     *
+     * The empty case keeps the map honest before commitment — you can't
+     * "see what others picked" to bias your own pin.
+     *
+     * Sits on the api_public firewall (3-segment? no — wait, it's a
+     * 3-segment URL, so it falls under the JWT firewall. access_control
+     * gives it PUBLIC_ACCESS so anonymous calls work too, returning empty).
+     */
+    #[Route('/rounds/{id}/pins', name: 'api_rounds_pins', methods: ['GET'])]
+    public function pins(string $id): JsonResponse
+    {
+        $round = $this->rounds->find($id);
+        if ($round === null) {
+            throw new NotFoundHttpException('Round not found.');
+        }
+
+        $status = $round->getStatus()->value;
+        if ($status === 'closed' || $status === 'resolved') {
+            return new JsonResponse($this->predictions->findAnonymizedPinsForRound($round));
+        }
+
+        // Open: only authed callers who have already placed get to see the
+        // anonymized aggregate (minus their own pin).
+        if ($status === 'open') {
+            $user = $this->security->getUser();
+            if (!$user instanceof User) {
+                return new JsonResponse([]);
+            }
+            $own = $this->predictions->findOneForUserInRound($user, $round);
+            if ($own === null) {
+                return new JsonResponse([]);
+            }
+            $all = $this->predictions->findAnonymizedPinsForRound($round);
+            $ownLat = $own->getLat();
+            $ownLng = $own->getLng();
+            $others = array_values(array_filter(
+                $all,
+                static fn(array $p) => $p['lat'] !== $ownLat || $p['lng'] !== $ownLng,
+            ));
+            return new JsonResponse($others);
+        }
+
+        return new JsonResponse([]);
+    }
+
+    /**
      * GET /api/rounds/{id}/my-prediction
      *
      * Returns the JWT'd user's prediction on this round, or null if they

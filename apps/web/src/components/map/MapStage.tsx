@@ -13,7 +13,7 @@ import Map, {
   type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
-import type { LngLat, MockPlayer, MockPresence } from "@/lib/mock";
+import type { LngLat, MockPresence } from "@/lib/mock";
 
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
@@ -23,7 +23,10 @@ export type MapStageProps = {
   myPin: LngLat | null;
   answer: LngLat | null;
   presence: MockPresence[];
-  players: MockPlayer[];
+  /** Anonymized pin coords from /api/rounds/{id}/pins — drives the heatmap
+   *  and the small dot markers. Pass [] to suppress the aggregate
+   *  visualization entirely. */
+  pins: Array<{ lat: number; lng: number }>;
   onMapClick: (coords: LngLat) => void;
   /** Fires on every mousemove over the map with the cursor lng/lat. Used to
    *  feed the presence-cursor broadcaster — kept as a prop so MapStage owns
@@ -38,7 +41,7 @@ export function MapStage({
   myPin,
   answer,
   presence,
-  players,
+  pins,
   onMapClick,
   onCursorMove,
   overlay,
@@ -50,16 +53,16 @@ export function MapStage({
   const heatmapData = useMemo(
     () => ({
       type: "FeatureCollection" as const,
-      features: players.map((p) => ({
+      features: pins.map((p, i) => ({
         type: "Feature" as const,
         geometry: {
           type: "Point" as const,
-          coordinates: [p.pinLocation.lng, p.pinLocation.lat],
+          coordinates: [p.lng, p.lat],
         },
-        properties: { id: p.id, intensity: 1 },
+        properties: { id: i, intensity: 1 },
       })),
     }),
-    [players],
+    [pins],
   );
 
   // Great-circle line from user pin → answer
@@ -240,13 +243,8 @@ export function MapStage({
         )}
 
         {placed &&
-          players.map((p) => (
-            <Marker
-              key={p.id}
-              longitude={p.pinLocation.lng}
-              latitude={p.pinLocation.lat}
-              anchor="center"
-            >
+          pins.map((p, i) => (
+            <Marker key={i} longitude={p.lng} latitude={p.lat} anchor="center">
               <span
                 className="block h-1.5 w-1.5 rounded-full opacity-80"
                 style={{

@@ -48,6 +48,10 @@ export type ApiPrediction = {
   lng: number;
   creditsStaked: number;
   placedAt: string;
+  /** Null until the round is resolved. */
+  distanceKm?: number | null;
+  rank?: number | null;
+  payout?: number;
 };
 
 export type ApiPlacePredictionResponse = {
