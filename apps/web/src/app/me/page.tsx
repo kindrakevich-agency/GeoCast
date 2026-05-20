@@ -12,6 +12,7 @@ import { StatCard } from "@/components/profile/StatCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useCareerPins } from "@/hooks/useCareerPins";
 import { useMyPredictions } from "@/hooks/useMyPredictions";
+import { ClaimableWinnings } from "@/components/profile/ClaimableWinnings";
 import {
   careerPins as mockCareerPins,
   myStats,
@@ -66,6 +67,13 @@ export default function ProfilePage() {
   const resolvedHistory = useMemo(
     () => liveRecentRounds.filter((r) => r.distanceKm !== null && r.rank !== null),
     [liveRecentRounds],
+  );
+
+  // List of round numbers that are resolved — used by ClaimableWinnings to
+  // poll /api/rounds/{id}/claim-proof for each.
+  const resolvedRoundIds = useMemo(
+    () => resolvedHistory.map((r) => r.number),
+    [resolvedHistory],
   );
 
   // Source-of-truth flags. Drives the three-state branching below.
@@ -226,6 +234,8 @@ export default function ProfilePage() {
             <CareerHeatmap pins={careerPins} />
           )}
         </motion.section>
+
+        {isAuthed && <ClaimableWinnings resolvedRoundIds={resolvedRoundIds} />}
 
         <motion.section
           initial={{ y: 16, opacity: 0 }}
