@@ -72,6 +72,11 @@ final class PlacePredictionService
             $newPrediction = new Prediction($user, $round, $lat, $lng);
 
             $user->setCreditsBalance($user->getCreditsBalance() - 1);
+            // games_played counts lifetime placements, not just resolved rounds —
+            // a user who placed on 2 open rounds has played 2 games, even if
+            // neither has been resolved yet. Incremented here, NOT in
+            // ResolveRoundService, to avoid double-count.
+            $user->setGamesPlayed($user->getGamesPlayed() + 1);
             $round->setPoolCredits($round->getPoolCredits() + 1);
             $round->setTotalParticipants($round->getTotalParticipants() + 1);
 

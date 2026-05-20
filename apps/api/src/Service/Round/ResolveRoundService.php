@@ -27,8 +27,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * Side effects in the same DB transaction:
  *   - Round status → resolved, answer + resolvedAt set
  *   - Each Prediction gets distance_km, rank, payout
- *   - Each owning User gets credits += payout, total_score += raw_score,
- *     games_played += 1
+ *   - Each owning User gets credits += payout, total_score += raw_score
+ *     (games_played is bumped at PLACEMENT, not here — see PlacePredictionService)
  *
  * Side effects outside the DB transaction (best-effort):
  *   - Redis ZSETs leaderboard:today/week/all incremented per user
@@ -109,8 +109,11 @@ final class ResolveRoundService
                     'UPDATE predictions SET distance_km = :d, `rank` = :r, payout = :p WHERE id = UNHEX(:id_hex)',
                     ['d' => $row['distance_km'], 'r' => $rank, 'p' => $payout, 'id_hex' => $row['prediction_id_hex']],
                 );
+                // games_played is incremented at PLACEMENT (one per pin), not
+                // here — see PlacePredictionService. Otherwise a user resolving
+                // a round would be double-counted.
                 $conn->executeStatement(
-                    'UPDATE users SET credits_balance = credits_balance + :p, total_score = total_score + :s, games_played = games_played + 1 WHERE id = UNHEX(:id_hex)',
+                    'UPDATE users SET credits_balance = credits_balance + :p, total_score = total_score + :s WHERE id = UNHEX(:id_hex)',
                     ['p' => $payout, 's' => $row['raw_score'], 'id_hex' => $row['user_id_hex']],
                 );
 
