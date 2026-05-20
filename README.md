@@ -1,7 +1,7 @@
 # GeoCast
 
 > **Drop a pin. Predict the world.**
-> Live demo: **[geocast.kindrakevich.com](https://geocast.kindrakevich.com)**
+> Live demo: **[geocast.games](https://geocast.games)**
 
 A daily geo-prediction game built as a portfolio piece. Every round,
 players see one question — _"Where will the next M5+ earthquake occur
@@ -161,7 +161,7 @@ the all-time leaderboard.
 - [x] Landing page with ambient drifting world map + 50 pulsing pins
 - [x] Resolution choreography — answer pin · flyTo · great-circle line · distance badge · leaderboard slide-in · confetti for top-10
 - [x] Profile (`/me`) + Leaderboard (`/leaderboard`) pages
-- [x] Production deploy → [geocast.kindrakevich.com](https://geocast.kindrakevich.com) (Hetzner + Cloudflare + GitHub Actions auto-deploy)
+- [x] Production deploy → [geocast.games](https://geocast.games) (Hetzner + Cloudflare + GitHub Actions auto-deploy)
 - [x] Symfony 7.4 API foundation — `/api/health`
 - [x] SIWE auth — `POST /api/auth/nonce` (Redis nonce, 5min TTL) and `POST /api/auth/verify` (signature recovery → JWT)
 - [x] `/api/me`, `/api/me/predictions` (paginated history), `/api/me/career-pins`

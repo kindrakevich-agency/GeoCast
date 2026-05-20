@@ -17,7 +17,7 @@ import type { ApiRound } from "@/lib/api/types";
 export const dynamic = "force-dynamic";
 
 async function fetchCurrentRound(): Promise<ApiRound | null> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "https://geocast.kindrakevich.com/api";
+  const base = process.env.NEXT_PUBLIC_API_URL ?? "https://geocast.games/api";
   try {
     const res = await fetch(`${base}/rounds/current`, { cache: "no-store" });
     if (!res.ok) return null;

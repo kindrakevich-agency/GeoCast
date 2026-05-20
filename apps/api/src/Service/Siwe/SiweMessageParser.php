@@ -13,12 +13,12 @@ namespace App\Service\Siwe;
  *
  * Reference message:
  *
- *   geocast.kindrakevich.com wants you to sign in with your Ethereum account:
+ *   geocast.games wants you to sign in with your Ethereum account:
  *   0x7f4c2b8e9a3d1f6c0b2e1a4d5c6b7a8e9f0a3b1d
  *
  *   Sign in to GeoCast — daily geo-prediction game.
  *
- *   URI: https://geocast.kindrakevich.com
+ *   URI: https://geocast.games
  *   Version: 1
  *   Chain ID: 1
  *   Nonce: V8FUHWPASU68HQWMQF32WZKU4UN56VAV

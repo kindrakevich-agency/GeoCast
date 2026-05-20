@@ -171,7 +171,7 @@ jobs:
             # `build` script also pins --webpack so we don't regress to
             # Turbopack's broken SSR chunk emitter.)
             rm -rf apps/web/.next
-            NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api \
+            NEXT_PUBLIC_API_URL=https://geocast.games/api \
             NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
             NEXT_PUBLIC_PUSHER_KEY="$NEXT_PUBLIC_PUSHER_KEY" \
             NEXT_PUBLIC_PUSHER_CLUSTER="$NEXT_PUBLIC_PUSHER_CLUSTER" \
