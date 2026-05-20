@@ -26,7 +26,7 @@ const OUT_DIR = resolve(REPO_ROOT, "docs", "screenshots");
 
 const args = process.argv.slice(2);
 const baseIdx = args.indexOf("--base");
-const BASE = baseIdx >= 0 ? args[baseIdx + 1] : "https://geocast.kindrakevich.com";
+const BASE = baseIdx >= 0 ? args[baseIdx + 1] : "https://geocast.games";
 
 const VIEWPORT = { width: 1440, height: 900 };
 const TILE_WAIT_MS = 2500; // give MapLibre time to render glyphs + sprites
@@ -56,23 +56,23 @@ async function main() {
   await mkdir(OUT_DIR, { recursive: true });
 
   await capture("hero", "/");
-  await capture("round-active", "/rounds/demo");
+  await capture("round-active", "/play");
   await capture("profile", "/me");
   await capture("leaderboard", "/leaderboard");
 
-  // Resolution shot: open the demo round, click the dev "resolve" button.
-  // Wrapped separately because it needs an interaction, not just a goto.
+  // "Pinned" shot — same round page but with one anonymous pin dropped, so
+  // the side panel slides in and the heatmap aggregate becomes visible. The
+  // dev-resolve shortcut is gone (admin-only flow now), so we settle for
+  // this engagement-state shot instead of a fake resolved view.
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
-  console.log(`→ resolution (${BASE}/rounds/demo + dev-resolve)`);
-  await page.goto(`${BASE}/rounds/demo`, { waitUntil: "domcontentloaded" });
+  console.log(`→ resolution (active round, pin dropped)`);
+  await page.goto(`${BASE}/play`, { waitUntil: "domcontentloaded" });
   await settleMap(page);
-  // Place a pin so the resolve button appears.
-  await page.locator("canvas.maplibregl-canvas").click({ position: { x: 800, y: 450 } });
+  await page.locator("canvas.maplibregl-canvas").click({ position: { x: 760, y: 460 } });
+  await page.waitForTimeout(400);
   await page.getByRole("button", { name: /place pin/i }).click().catch(() => {});
-  await page.waitForTimeout(500);
-  await page.getByText(/dev · resolve round/i).click().catch(() => {});
-  await page.waitForTimeout(3500); // flyTo + line draw
+  await page.waitForTimeout(2200); // pin drop + ripple animation
   await page.screenshot({
     path: resolve(OUT_DIR, "resolution.png"),
     fullPage: false,
