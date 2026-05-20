@@ -6,6 +6,7 @@ import type { Hex } from "viem";
 import { baseSepolia } from "viem/chains";
 import { mockUsdcAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 export type MintStatus =
   | { phase: "idle" }
@@ -48,10 +49,7 @@ export function useMintTestUsdc(): {
         });
         setStatus({ phase: "done", txHash });
       } catch (e) {
-        setStatus({
-          phase: "error",
-          message: (e as Error).message || "Mint failed.",
-        });
+        setStatus({ phase: "error", message: humanizeWalletError(e) });
       }
     },
     [address, cfg, writeContractAsync],

@@ -7,6 +7,7 @@ import type { Hex } from "viem";
 import { geoCastPoolAdminAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
 import { toScaledInt32 } from "@/lib/onchain/commit";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 export type ResolveOnchainStatus =
   | { phase: "idle" }
@@ -64,7 +65,7 @@ export function useResolveOnchain(): {
       } catch (e) {
         setStatus({
           phase: "error",
-          message: (e as Error).message || "resolve failed.",
+          message: humanizeWalletError(e),
         });
       }
     },

@@ -6,6 +6,7 @@ import { baseSepolia, base } from "viem/chains";
 import type { Hex } from "viem";
 import { geoCastPoolAdminAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 export type CreateRoundStatus =
   | { phase: "idle" }
@@ -69,7 +70,7 @@ export function useCreateRound(): {
       } catch (e) {
         setStatus({
           phase: "error",
-          message: (e as Error).message || "createRound failed.",
+          message: humanizeWalletError(e),
         });
       }
     },

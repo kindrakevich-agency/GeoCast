@@ -5,6 +5,7 @@ import { useAccount, useWriteContract } from "wagmi";
 import type { Hex } from "viem";
 import { geoCastPoolAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 export type ClaimStatus =
   | { phase: "idle" }
@@ -40,10 +41,7 @@ export function useClaim(roundId: number) {
         });
         setStatus({ phase: "done", txHash });
       } catch (e) {
-        setStatus({
-          phase: "error",
-          message: (e as Error).message || "Claim failed.",
-        });
+        setStatus({ phase: "error", message: humanizeWalletError(e) });
       }
     },
     [address, cfg, writeContractAsync],

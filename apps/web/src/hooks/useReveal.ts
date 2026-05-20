@@ -6,6 +6,7 @@ import type { Hex } from "viem";
 import { geoCastPoolAbi } from "@/lib/onchain/abi";
 import { getOnchainConfig } from "@/lib/onchain/config";
 import { loadStashedCommit, toScaledInt32 } from "@/lib/onchain/commit";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 export type RevealStatus =
   | { phase: "idle" }
@@ -56,10 +57,7 @@ export function useReveal(roundId: number) {
       });
       setStatus({ phase: "done", txHash });
     } catch (e) {
-      setStatus({
-        phase: "error",
-        message: (e as Error).message || "Reveal failed.",
-      });
+      setStatus({ phase: "error", message: humanizeWalletError(e) });
     }
   }, [address, cfg, roundId, writeContractAsync]);
 

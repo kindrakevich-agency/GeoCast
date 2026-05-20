@@ -15,6 +15,7 @@ import {
   makeSalt,
   stashCommit,
 } from "@/lib/onchain/commit";
+import { humanizeWalletError } from "@/lib/onchain/errors";
 
 /**
  * Two-step commit flow:
@@ -110,10 +111,7 @@ export function useCommitBet(roundId: number) {
 
         setStatus({ phase: "done", txHash, salt });
       } catch (e) {
-        setStatus({
-          phase: "error",
-          message: (e as Error).message || "Commit failed.",
-        });
+        setStatus({ phase: "error", message: humanizeWalletError(e) });
       }
     },
     [address, allowance, cfg, refetchAllowance, roundId, writeContractAsync],
