@@ -33,10 +33,18 @@ This isn't a roadmap. Everything below works in production at
   public `round-{id}` channel.
 - **Heatmap reveal** — once you've committed, the aggregate of every other
   pin renders as a cyan→magenta heat layer, anonymised server-side.
-- **Resolution choreography** — admin drops the answer pin (with built-in
-  Nominatim geocoding); the camera `flyTo`s, a great-circle line draws
-  from your pin to truth, your distance badge pulses in, confetti for
-  top-10.
+- **Resolution choreography** — once the answer pin is set (by the
+  auto-resolver or manually), the camera `flyTo`s, a great-circle line
+  draws from your pin to truth, your distance badge pulses in, confetti
+  for top-10.
+- **Auto-resolver framework** — pluggable `ResolverInterface` per question
+  template. A nightly cron generates candidate questions; admin picks one
+  to publish; when its `resolves_at` hits, another cron calls the source
+  API (Open-Meteo for weather, USGS for earthquakes, etc.), gets the
+  ground-truth coordinates, and resolves the round automatically.
+  Nobody picks the winner — public APIs do. First live template:
+  *"Hottest European capital tomorrow"* via Open-Meteo (~47 capitals,
+  hourly tie-break, multi-winner fallback).
 - **SIWE wallet auth** — EIP-4361 signature recovery via
   `kornrunner/secp256k1`, Redis-backed single-use nonces (5-min TTL,
   namespaced so they can't collide with co-tenants), JWT exchange.
@@ -74,8 +82,9 @@ This isn't a roadmap. Everything below works in production at
 | Infra        | Docker Compose · nginx → php-fpm 8.3 · Cloudflare in front · Hetzner VPS         |
 | CI/CD        | GitHub Actions — typecheck + build + `lint:container` + composer validate gate, then SSH deploy |
 
-40 PHP files (controllers + services + migrations), 76 TS/TSX files, 4
-Doctrine migrations, 9 Foundry contract tests, 5 PHPUnit test files
+54 PHP source files (controllers + services + entities + commands),
+79 TS/TSX files, 5 Doctrine migrations, 9 Foundry contract tests, 7
+PHPUnit test files
 covering the math-critical paths (Merkle builder, event decoder, scoring).
 
 ---
@@ -140,14 +149,84 @@ GET   /api/me/career-pins         career heatmap coordinates
 GET   /api/leaderboard?period=today|week|all   top 100 from Redis ZSET
 GET   /api/stats                  landing-page metrics
 
-POST  /api/admin/rounds           create scheduled round
+POST  /api/admin/rounds                       create scheduled round
 POST  /api/admin/rounds/{id}/open
-POST  /api/admin/rounds/{id}/resolve   geocode + rank + payout + broadcast
-POST  /api/admin/rounds/{id}/settle    v2 — build Merkle tree + persist proofs
+POST  /api/admin/rounds/{id}/resolve          manual fallback: rank + payout + broadcast
+POST  /api/admin/rounds/{id}/settle           v2 — build Merkle tree + persist proofs
+GET   /api/admin/suggestions                  pending auto-generated question candidates
+POST  /api/admin/suggestions/{id}/accept      materialise a Round wired to its resolver
+POST  /api/admin/suggestions/{id}/reject      dismiss a pending suggestion
 
 POST  /api/pusher/auth            presence-channel auth callback
 GET   /api/health                 liveness probe
 ```
+
+---
+
+## Auto-resolver framework
+
+Rounds don't need a human to pick the answer. Every question template
+ships paired with a resolver — a small PHP class that knows two things:
+how to *propose* a candidate question, and how to *resolve* it from a
+public API when its time comes. The admin sees pending suggestions in
+the sidebar, picks one, and the rest happens on the cron.
+
+```
+┌──────────────────┐      ┌────────────────────┐      ┌─────────────────┐
+│ app:questions:   │      │ /admin/suggestions │      │ app:rounds:     │
+│ suggest          │─────►│ — admin picks one  │─────►│ auto-resolve    │
+│  (every 6h)      │      │   (or dismisses)   │      │  (every 5 min)  │
+└──────────────────┘      └────────────────────┘      └────────┬────────┘
+        │                                                       │
+        ▼                                                       ▼
+ResolverInterface.suggest()                       ResolverInterface.resolve()
+   - reads forecast/state                            - reads observed/actual
+   - returns SuggestionDraft                         - returns ResolutionResult
+     (question + window + params)                      (points[] + audit log)
+        │                                                       │
+        ▼                                                       ▼
+   round_suggestions table                          ResolveRoundService.resolveMulti()
+     status=pending                                   ▶ rank, payout, leaderboards
+                                                      ▶ Pusher broadcast
+```
+
+### What's wired
+
+| Source | Status | Templates |
+|---|---|---|
+| **Open-Meteo** (forecast + archive) | **Live** | `openmeteo.hottest-european-capital` |
+| **USGS Earthquakes** (FDSN feed) | Queued | next-M5+, strongest-week |
+| NASA FIRMS · GDELT · NOAA | Planned | wildfire, geo-news, aurora |
+
+`HottestEuropeanCapitalResolver` is the canonical example
+(`apps/api/src/Service/Questions/Resolver/`):
+
+1. **`suggest()`** — hits Open-Meteo's forecast endpoint for ~47
+   European capitals, ranks by daily max temperature, writes a
+   `SuggestionDraft` with question text + opens/closes/resolves
+   timestamps + a top-5 preview snapshot the admin sees.
+2. **`resolve()`** — at `resolves_at` (06:00 UTC the day after close,
+   to give the archive endpoint time to populate), hits the archive
+   endpoint for the same 47 cities. Picks the city with the highest
+   `temperature_2m_max`. If two cities tie within 0.05°C on the daily
+   aggregate, a second call to the hourly endpoint splits the tie at
+   0.1°C precision. If a true tie survives, the round resolves
+   *multi-winner* — `Round.answer_points` carries the full list and
+   each prediction's `distance_km` is computed as
+   `LEAST(d_to_winner_1, d_to_winner_2, …)`.
+
+Adding a new resolver = one class implementing `ResolverInterface`,
+auto-registered via the `app.question_resolver` DI tag. No wiring,
+no boilerplate, no admin-UI changes — the sidebar picks it up
+automatically.
+
+PHPUnit coverage in `tests/Service/Questions/`:
+
+- `OpenMeteoClientTest` — multi-city order preservation, single-city
+  vs array response shape, null handling on missing data, 5xx propagation.
+- `HottestEuropeanCapitalResolverTest` — clear single winner, daily
+  tie broken by hourly probe, true multi-winner survives both stages,
+  missing-`date` param rejection.
 
 ---
 
@@ -272,12 +351,19 @@ ed25519 keypair (`bin/console lexik:jwt:generate-keypair --skip-if-exists`).
 │   │       └── lib/        api client · onchain config · mock helpers
 │   └── api/                Symfony 7.4 + API Platform 4
 │       ├── src/
-│       │   ├── Controller/     RoundsController · PredictionsController · MeController · LeaderboardController · AdminRoundsController · …
-│       │   ├── Service/        Siwe/ · Broadcast/PusherBroadcaster · Onchain/MerkleBuilder · Onchain/OnchainSync · Resolve/ResolveRoundService
-│       │   ├── Entity/         User · Round · Prediction (with ULIDs + SPATIAL coords)
-│       │   ├── Command/        app:rounds:tick · app:onchain:sync · …
+│       │   ├── Controller/     RoundsController · PredictionsController · MeController · LeaderboardController · AdminRoundsController · AdminSuggestionsController · …
+│       │   ├── Service/
+│       │   │   ├── Siwe/                 SiweMessageParser · SiweVerifier · SiweNonceService
+│       │   │   ├── Broadcast/            PusherBroadcaster
+│       │   │   ├── Round/                ResolveRoundService (multi-winner) · RoundService
+│       │   │   ├── Onchain/              MerkleBuilder · OnchainSync · SettlementBuilder
+│       │   │   └── Questions/            ResolverInterface · ResolverRegistry
+│       │   │       ├── Resolver/         HottestEuropeanCapitalResolver · …
+│       │   │       └── Source/           OpenMeteoClient · EuropeanCapitals
+│       │   ├── Entity/         User · Round · Prediction · RoundSuggestion (ULIDs + SPATIAL coords)
+│       │   ├── Command/        app:rounds:tick · app:onchain:sync · app:questions:suggest · app:rounds:auto-resolve
 │       │   └── Security/       JwtAuthenticator · AdminVoter
-│       └── migrations/         4 Doctrine migrations
+│       └── migrations/         5 Doctrine migrations
 ├── contracts/              Foundry — GeoCastPool.sol + MockUSDC.sol + tests
 ├── infra/
 │   ├── nginx/api.conf
