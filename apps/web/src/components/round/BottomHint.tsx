@@ -6,9 +6,11 @@ import { AnimatePresence, motion } from "framer-motion";
 export type BottomHintProps = {
   placed: boolean;
   coords: { lng: number; lat: number } | null;
+  /** What the player pays per pin. Defaults to "1 credit". */
+  costLabel?: string;
 };
 
-export function BottomHint({ placed, coords }: BottomHintProps) {
+export function BottomHint({ placed, coords, costLabel = "1 credit" }: BottomHintProps) {
   return (
     <div className="pointer-events-none absolute bottom-6 left-1/2 z-30 -translate-x-1/2">
       <AnimatePresence mode="wait">
@@ -29,7 +31,7 @@ export function BottomHint({ placed, coords }: BottomHintProps) {
                 Click anywhere on the map to place your pin
               </span>
               <span className="rounded-full bg-white/5 px-2 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-xs">
-                1 credit
+                {costLabel}
               </span>
             </GlassPanel>
           </motion.div>

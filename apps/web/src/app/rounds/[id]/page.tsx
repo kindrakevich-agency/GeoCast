@@ -363,7 +363,13 @@ export default function ActiveRoundPage() {
         />
       )}
 
-      {!resolved && <BottomHint placed={placed} coords={myPin} />}
+      {!resolved && (
+        <BottomHint
+          placed={placed}
+          coords={myPin}
+          costLabel={shouldUseOnchain ? "1 USDC" : "1 credit"}
+        />
+      )}
 
       <ConfirmModal
         open={pending !== null}
@@ -373,6 +379,8 @@ export default function ActiveRoundPage() {
           setPending(null);
           setSubmitError(null);
         }}
+        costLabel={shouldUseOnchain ? "1 USDC" : "1 credit"}
+        onchain={shouldUseOnchain}
       />
 
       {/* Submit error toast — sits above the BottomHint */}
