@@ -22,13 +22,41 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GeoCast — Drop a pin. Predict the world.",
+  metadataBase: new URL("https://geocast.games"),
+  title: {
+    default: "GeoCast — Drop a pin. Predict the world.",
+    template: "%s · GeoCast",
+  },
   description:
     "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+  applicationName: "GeoCast",
+  keywords: [
+    "geo prediction",
+    "prediction game",
+    "geo game",
+    "map game",
+    "web3 game",
+    "GeoCast",
+  ],
+  authors: [{ name: "Vitalii Kindrakevych", url: "https://github.com/kindrakevich-agency" }],
+  creator: "Vitalii Kindrakevych",
   openGraph: {
-    title: "GeoCast",
-    description: "Drop a pin. Predict the world.",
     type: "website",
+    siteName: "GeoCast",
+    title: "GeoCast — Drop a pin. Predict the world.",
+    description: "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+    url: "https://geocast.games",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GeoCast — Drop a pin. Predict the world.",
+    description: "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
 };
 
