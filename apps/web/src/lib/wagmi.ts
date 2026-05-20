@@ -2,7 +2,7 @@
 
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http } from "wagmi";
-import { arbitrum, base, mainnet, optimism, polygon } from "wagmi/chains";
+import { arbitrum, base, baseSepolia, mainnet, optimism, polygon } from "wagmi/chains";
 
 /**
  * Wagmi + RainbowKit config.
@@ -36,13 +36,15 @@ export const wagmiConfig = getDefaultConfig({
   projectId:
     process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
     "ffa1660488cb0559fb49febf31a368ff",
-  chains: [mainnet, base, polygon, optimism, arbitrum],
+  chains: [mainnet, base, baseSepolia, polygon, optimism, arbitrum],
   transports: {
-    [mainnet.id]:   http("https://ethereum-rpc.publicnode.com"),
-    [base.id]:      http("https://base-rpc.publicnode.com"),
-    [polygon.id]:   http("https://polygon-bor-rpc.publicnode.com"),
-    [optimism.id]:  http("https://optimism-rpc.publicnode.com"),
-    [arbitrum.id]:  http("https://arbitrum-one-rpc.publicnode.com"),
+    [mainnet.id]:     http("https://ethereum-rpc.publicnode.com"),
+    [base.id]:        http("https://base-rpc.publicnode.com"),
+    // Base Sepolia (v2 testnet) — Coinbase's public RPC.
+    [baseSepolia.id]: http("https://sepolia.base.org"),
+    [polygon.id]:     http("https://polygon-bor-rpc.publicnode.com"),
+    [optimism.id]:    http("https://optimism-rpc.publicnode.com"),
+    [arbitrum.id]:    http("https://arbitrum-one-rpc.publicnode.com"),
   },
   ssr: true,
 });
