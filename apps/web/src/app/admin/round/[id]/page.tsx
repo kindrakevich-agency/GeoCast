@@ -214,7 +214,14 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
 
   const onchain = useOnchainRound(round.number);
   const { status: resolveOnchainStatus, resolve: resolveOnchain } = useResolveOnchain();
-  const useOnchainPath = onchain.exists;
+  // On-chain settle needs ≥1 committed player — otherwise MerkleBuilder has
+  // no leaves and the /settle endpoint 400s with "no on-chain commits yet".
+  // Each commit deposits BET (1 USDC) into the contract's pool, so
+  // `poolMicros > 0` is equivalent to "at least one player committed".
+  // Falls back to the off-chain credit flow when the on-chain side is empty.
+  const onchainHasCommits = onchain.exists && onchain.poolMicros > 0n;
+  const useOnchainPath = onchainHasCommits;
+  const onchainMirroredButEmpty = onchain.exists && !onchainHasCommits;
 
   // Debounced Nominatim search.
   useEffect(() => {
@@ -451,6 +458,13 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
             <p className="text-[10px] text-[var(--color-text-muted)]">
               Two-step: server computes the payout Merkle root → you sign
               GeoCastPool.resolve via your wallet → players can claim.
+            </p>
+          )}
+          {onchainMirroredButEmpty && (
+            <p className="rounded-md border border-[var(--color-amber)] bg-[var(--color-amber)]/10 px-3 py-2 text-[10px] text-[var(--color-amber)]">
+              Round is mirrored on-chain but no players committed there —
+              the Merkle tree would have zero leaves. Resolving via the
+              off-chain credit flow instead.
             </p>
           )}
           {error && <p className="text-xs text-[var(--color-magenta)]">{error}</p>}
