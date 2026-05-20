@@ -1,0 +1,93 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0a0e1a",
+    "primaryColor": "#0e1426",
+    "primaryTextColor": "#f0f4f8",
+    "primaryBorderColor": "#00d4ff",
+    "lineColor": "#8892a6",
+    "secondaryColor": "#1a2240",
+    "tertiaryColor": "#0e1426",
+    "fontSize": "15px",
+    "fontFamily": "Inter, system-ui, sans-serif",
+    "edgeLabelBackground": "#0a0e1a",
+    "clusterBkg": "#0e1426",
+    "clusterBorder": "#1f2a44",
+    "titleColor": "#f0f4f8",
+    "labelTextColor": "#f0f4f8"
+  },
+  "flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 60, "padding": 18}
+}}%%
+flowchart TB
+    wallet(["Wallet · SIWE + wagmi"])
+
+    subgraph WEB["Frontend &nbsp;·&nbsp; Next.js 16 &nbsp;·&nbsp; geocast.games"]
+        direction LR
+        landing["Landing<br/>/"]
+        play["Active round<br/>/play · /rounds/:id"]
+        me["Profile<br/>/me"]
+        lb["Leaderboard<br/>/leaderboard"]
+        admin["Admin<br/>/admin/round/:id"]
+    end
+
+    subgraph API["API &nbsp;·&nbsp; Symfony 7.4 &nbsp;·&nbsp; /api"]
+        direction TB
+        ctrl["Controllers<br/>Auth · Rounds · Predictions<br/>Me · Leaderboard · Admin"]
+        svc["Services<br/>SiweMessageParser · ResolveRoundService<br/>PusherBroadcaster · MerkleBuilder · OnchainSync"]
+        cron["Console crons<br/>app:rounds:tick (1 min)<br/>app:onchain:sync (5 min)"]
+        ctrl --> svc
+        cron --> svc
+    end
+
+    subgraph DATA["Persistence"]
+        direction LR
+        maria[("MariaDB 10.11<br/>SPATIAL POINT<br/>ST_Distance_Sphere")]
+        redis[("Redis 7<br/>ZSET leaderboards<br/>SIWE nonces")]
+    end
+
+    subgraph RT["Realtime &nbsp;·&nbsp; Pusher Channels"]
+        direction LR
+        chRound["round-:id<br/>pin-placed · resolved"]
+        chPres["presence-round-:id<br/>cursor moves"]
+        chLb["leaderboard<br/>updates"]
+    end
+
+    subgraph CHAIN["On-chain &nbsp;·&nbsp; Base Sepolia"]
+        direction LR
+        rpc["Alchemy RPC<br/>eth_getLogs"]
+        pool["GeoCastPool.sol<br/>commit · reveal · claim<br/>Merkle drop · 5% rake"]
+        usdc["USDC<br/>(test token)"]
+    end
+
+    wallet -- "SIWE nonce + sign" --> ctrl
+    WEB -- "HTTPS / JWT" --> ctrl
+
+    svc --> maria
+    svc --> redis
+    svc --> chRound
+    svc --> chPres
+    svc --> chLb
+    svc --> rpc
+
+    rpc <--> pool
+    pool --- usdc
+    play -- "commitBet · reveal · claim" --> pool
+    admin -- "createRound · resolve" --> pool
+
+    chRound -. "subscribe" .-> WEB
+    chPres  -. "subscribe" .-> WEB
+    chLb    -. "subscribe" .-> WEB
+
+    classDef webNode fill:#0e1a2e,stroke:#00d4ff,stroke-width:1.5px,color:#f0f4f8
+    classDef apiNode fill:#1a0e1f,stroke:#ff006e,stroke-width:1.5px,color:#f0f4f8
+    classDef dataNode fill:#0e1426,stroke:#00ff88,stroke-width:1.5px,color:#f0f4f8
+    classDef rtNode fill:#1f1a0a,stroke:#ffb800,stroke-width:1.5px,color:#f0f4f8
+    classDef chainNode fill:#160e26,stroke:#a78bfa,stroke-width:1.5px,color:#f0f4f8
+    classDef walletNode fill:#1a1024,stroke:#ff006e,stroke-width:2px,color:#f0f4f8
+
+    class landing,play,me,lb,admin webNode
+    class ctrl,svc,cron apiNode
+    class maria,redis dataNode
+    class chRound,chPres,chLb rtNode
+    class rpc,pool,usdc chainNode
+    class wallet walletNode

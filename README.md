@@ -112,34 +112,13 @@ node infra/scripts/capture-screenshots.mjs --base http://localhost:3000
 
 ## Architecture
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Next.js 16     │     │  Symfony 7.4 API │     │  MariaDB 10.11  │
-│  /play /me      │◄────┤  /api/*           │◄────┤  SPATIAL POINT  │
-│  /leaderboard   │     │  (JWT + SIWE)     │     │  ST_Distance_…  │
-│  /admin/round   │     │                   │     └─────────────────┘
-└────────┬────────┘     │                   │     ┌─────────────────┐
-         │              │  PusherBroadcaster│◄────┤  Redis 7        │
-         │              │  ResolveRound…    │     │  ZSET boards    │
-         │              │  MerkleBuilder    │     │  SIWE nonces    │
-         │              │  OnchainSync      │     └─────────────────┘
-         │              └────────┬──────────┘
-         │                       │
-         │              ┌────────▼──────────┐
-         │              │  Pusher Channels   │
-         └─────────────►│  round-{id}        │
-                        │  presence-round-…  │
-                        │  leaderboard       │
-                        └────────────────────┘
-                                 ▲
-         ┌───────────────────────┘ (every 5min cron)
-         │
-┌────────┴────────┐     ┌──────────────────┐
-│  Base L2 RPC    │◄────┤  GeoCastPool.sol  │
-│  (Alchemy)      │     │  commit-reveal    │
-│                 │     │  Merkle claims    │
-│                 │     │  5% rake          │
-└─────────────────┘     └──────────────────┘
+![GeoCast architecture — Wallet · Frontend · API · Persistence · Realtime · On-chain](docs/architecture.png)
+
+Source-of-truth is [`docs/architecture.mmd`](docs/architecture.mmd)
+(Mermaid). Regenerate the PNG after editing:
+
+```bash
+bash infra/scripts/render-architecture.sh
 ```
 
 ### API surface (excerpt)
