@@ -152,11 +152,17 @@ jobs:
             echo "=== Backend: restart PHP-FPM 8.3 (clear opcache) ==="
             /etc/init.d/php-fpm-83 restart
 
-            echo "=== Frontend: install + build ==="
+            echo "=== Frontend: install + clean rebuild ==="
             cd "$APP_DIR"
             corepack enable
             corepack prepare pnpm@10.29.2 --activate
             pnpm install --frozen-lockfile
+            # Nuke .next before each build — Turbopack/webpack caches have
+            # bitten us with stale-chunk bugs more than once. The clean
+            # build is 30s slower but reliable. (apps/web/package.json's
+            # `build` script also pins --webpack so we don't regress to
+            # Turbopack's broken SSR chunk emitter.)
+            rm -rf apps/web/.next
             NEXT_PUBLIC_API_URL=https://geocast.kindrakevich.com/api \
             NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
             NEXT_PUBLIC_PUSHER_KEY="$NEXT_PUBLIC_PUSHER_KEY" \
@@ -167,12 +173,16 @@ jobs:
             chown -R www:www apps/web/.next 2>/dev/null || true
 
             echo "=== Restart Node project (managed by aaPanel) ==="
-            if [ -f "$NODE_PID" ]; then
-              kill "$(cat "$NODE_PID")" 2>/dev/null || true
-              sleep 2
-            fi
+            # Kill by port — the PID file goes stale when Node is started
+            # outside the panel script (e.g. by a manual rebuild), and the
+            # stale-PID kill leaves an orphaned next-server process holding
+            # :3010 with the OLD .next bundle. fuser -k targets whoever
+            # actually owns the socket.
+            fuser -k -n tcp 3010 2>/dev/null || true
+            rm -f "$NODE_PID" 2>/dev/null || true
+            sleep 3
             bash "$NODE_SCRIPT"
-            sleep 4
+            sleep 5
             curl -sf -o /dev/null http://127.0.0.1:3010/ && echo "✓ web serving on :3010" || (echo "✗ web not responding" && tail -20 /www/wwwlogs/nodejs/geocast.log && exit 1)
             curl -sf -o /dev/null http://127.0.0.1/api/health -H 'Host: geocast.kindrakevich.com' && echo "✓ api/health responding" || echo "(api/health not yet wired — controllers come in next commit)"
 
