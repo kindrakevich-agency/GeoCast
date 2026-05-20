@@ -8,8 +8,12 @@ import type { Address } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
 export const BASE_USDC_MAINNET: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-// Base Sepolia USDC — Circle's official deployment.
-export const BASE_USDC_SEPOLIA: Address = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+// Base Sepolia USDC — our deployed MockUSDC (matches what GeoCastPool's
+// `usdc()` returns on the live contract). NOT Circle's native testnet USDC
+// (0x036CbD…F7e) — that one looks attractive but requires minter
+// authorization, so the in-app "mint test USDC" button would revert.
+// MockUSDC has a public `mint(to, amount)` anyone can call.
+export const BASE_USDC_SEPOLIA: Address = "0x9ce0617d43b9222f06056ea613e0cc9bc11d3b2d";
 
 export type OnchainConfig = {
   chainId: number;
