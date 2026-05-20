@@ -55,6 +55,7 @@ export default function Home() {
       <div className="relative z-10">
         <HeroSection onSignedIn={onSignedIn} />
         <HowItWorksSection />
+        <ResolutionSourcesSection />
         <ScoringSection />
         <StatsSection />
         <FinalCTASection onSignedIn={onSignedIn} />
@@ -139,9 +140,9 @@ const STEPS = [
   },
   {
     n: "03",
-    title: "Wait for the truth",
+    title: "Data decides — not a human",
     body:
-      "Round closes after 24h. The cron flips it to closed, then an admin (or future oracle) reveals the actual location.",
+      "Round closes on the wall clock. A cron then queries the source API for the question (Open-Meteo for weather, USGS for earthquakes, etc.) and posts the truth automatically. No admin picks coordinates.",
     accent: "amber" as const,
   },
   {
@@ -190,6 +191,220 @@ function HowItWorksSection() {
         </div>
       </div>
     </section>
+  );
+}
+
+// -------------------- Resolution sources --------------------
+//
+// Trust section. Players need to know answers aren't picked by a human —
+// they're fetched from public APIs by a cron at resolves_at. This is the
+// single most important credibility signal for a prediction game.
+
+const SOURCES = [
+  {
+    name: "Open-Meteo",
+    code: "openmeteo.*",
+    status: "live" as const,
+    statusAccent: "green" as const,
+    examples: [
+      "Hottest European capital tomorrow",
+      "Heaviest rainfall in 24h",
+      "Strongest wind gust",
+    ],
+    blurb:
+      "Forecast + observed archive across ~47 curated capitals. Two-stage tie-break: daily aggregate → hourly archive peak.",
+    href: "https://open-meteo.com/",
+  },
+  {
+    name: "USGS Earthquakes",
+    code: "usgs.*",
+    status: "queued" as const,
+    statusAccent: "amber" as const,
+    examples: [
+      "Next M5+ earthquake in 24h",
+      "Strongest quake this week",
+    ],
+    blurb:
+      "Real-time FDSN feed of M2.5+ events worldwide. ~4 M5+ globally per day; graceful fallback to M4.5+ on quiet windows.",
+    href: "https://earthquake.usgs.gov/",
+  },
+  {
+    name: "NASA FIRMS · GDELT · NOAA",
+    code: "nasa-firms.* / gdelt.* / noaa.*",
+    status: "planned" as const,
+    statusAccent: "cyan" as const,
+    examples: [
+      "Largest active wildfire today",
+      "Today's biggest geo-tagged news event",
+      "Where will the aurora be visible tonight?",
+    ],
+    blurb:
+      "Each source is a single Symfony class implementing ResolverInterface — code is open-source, drop-in extensible.",
+    href: "https://github.com/kindrakevich-agency/GeoCast",
+  },
+];
+
+function ResolutionSourcesSection() {
+  return (
+    <section className="relative w-full px-6 py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl">
+        <SectionEyebrow>How answers are resolved</SectionEyebrow>
+        <h2 className="mb-4 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
+          <span style={{ color: "var(--color-amber)" }}>No one picks the winner.</span>
+          <br />
+          Public APIs do.
+        </h2>
+        <p className="mb-12 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
+          When a round closes, a Symfony cron queries the question's source API,
+          finds the actual location of the answer, and posts the coordinates
+          on-chain (or off-chain, for credit rounds) — all without any
+          human choosing where the pin lands. The same data anyone can fetch
+          from the public endpoint is the data that decides who wins.
+        </p>
+
+        {/* The pipeline */}
+        <div className="mb-10">
+          <GlassPanel className="p-6">
+            <p className="mb-4 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+              Resolution pipeline
+            </p>
+            <ol className="grid gap-4 sm:grid-cols-4">
+              <PipelineStep n="01" label="Round closes" detail="Cron flips status at closes_at" accent="amber" />
+              <PipelineStep n="02" label="Resolver fires" detail="API call to Open-Meteo / USGS / etc." accent="cyan" />
+              <PipelineStep n="03" label="Tie-break" detail="Hourly probe splits 0.1°C ties" accent="magenta" />
+              <PipelineStep n="04" label="Payout" detail="Haversine rank → pool split → on-chain" accent="green" />
+            </ol>
+          </GlassPanel>
+        </div>
+
+        {/* Sources grid */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {SOURCES.map((s, i) => (
+            <motion.a
+              key={s.name}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.5, delay: i * 0.08 }}
+              className="block transition-transform hover:-translate-y-0.5"
+            >
+              <GlassPanel className="h-full p-6">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-[family-name:var(--font-space-grotesk)] text-base font-semibold">
+                      {s.name}
+                    </h3>
+                    <p className="mt-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                      {s.code}
+                    </p>
+                  </div>
+                  <StatusPill status={s.status} accent={s.statusAccent} />
+                </div>
+
+                <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
+                  {s.blurb}
+                </p>
+
+                <p className="mb-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
+                  Example questions
+                </p>
+                <ul className="space-y-1">
+                  {s.examples.map((ex) => (
+                    <li key={ex} className="flex items-start gap-2 text-sm">
+                      <span
+                        className="mt-1.5 inline-block h-1 w-1 shrink-0 rounded-full"
+                        style={{ background: `var(--color-${s.statusAccent})` }}
+                      />
+                      <span className="text-[var(--color-text)]">{ex}</span>
+                    </li>
+                  ))}
+                </ul>
+              </GlassPanel>
+            </motion.a>
+          ))}
+        </div>
+
+        <p className="mt-10 max-w-3xl text-sm leading-relaxed text-[var(--color-text-muted)]">
+          The resolver framework is{" "}
+          <a
+            href="https://github.com/kindrakevich-agency/GeoCast/tree/main/apps/api/src/Service/Questions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--color-cyan)] underline-offset-4 hover:underline"
+          >
+            open-source
+          </a>
+          {" "}— every question template is a single PHP class that implements{" "}
+          <code className="rounded-sm border border-[var(--color-border)] bg-black/40 px-1.5 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-cyan)]">
+            ResolverInterface
+          </code>{" "}
+          with a suggest() and a resolve() method. You can read exactly what
+          query is being made, with what parameters, to which endpoint.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function PipelineStep({
+  n,
+  label,
+  detail,
+  accent,
+}: {
+  n: string;
+  label: string;
+  detail: string;
+  accent: "cyan" | "magenta" | "amber" | "green";
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full font-[family-name:var(--font-jetbrains-mono)] text-[10px] font-bold"
+        style={{
+          background: `var(--color-${accent})`,
+          color: "var(--color-bg)",
+        }}
+      >
+        {n}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[var(--color-text)]">{label}</p>
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)]">
+          {detail}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function StatusPill({
+  status,
+  accent,
+}: {
+  status: "live" | "queued" | "planned";
+  accent: "cyan" | "magenta" | "amber" | "green";
+}) {
+  return (
+    <span
+      className="shrink-0 rounded-full border px-2 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] uppercase tracking-[0.22em]"
+      style={{ borderColor: `var(--color-${accent})`, color: `var(--color-${accent})` }}
+    >
+      {status === "live" && (
+        <>
+          <span
+            className="mr-1.5 inline-block h-1 w-1 animate-pulse rounded-full align-middle"
+            style={{ background: `var(--color-${accent})`, boxShadow: `0 0 6px var(--color-${accent})` }}
+          />
+          live
+        </>
+      )}
+      {status === "queued" && "queued"}
+      {status === "planned" && "planned"}
+    </span>
   );
 }
 
@@ -453,6 +668,10 @@ const FAQ: { q: string; a: string }[] = [
     a: "Using the haversine formula on a sphere of radius 6,371 km — the standard great-circle distance between two latitude/longitude points. The math runs server-side in MariaDB via ST_Distance_Sphere on indexed SPATIAL POINT columns, so ranking thousands of pins on round resolution is sub-second.",
   },
   {
+    q: "Who decides where the correct answer is?",
+    a: "Nobody — a public API does. When a round closes, a cron job queries the question's source endpoint (Open-Meteo for weather, USGS for earthquakes, NASA FIRMS for wildfires, etc.) and posts the actual answer coordinates automatically. There is no admin button that places the pin. The same data anyone can fetch from the public endpoint is the data that decides the round, which makes outcomes verifiable and tamper-resistant. If a daily aggregate is tied (two cities at the same max temperature), a second hourly probe breaks it; if a true tie survives, the round resolves multi-winner and your distance scores against the closest of the tied locations.",
+  },
+  {
     q: "How is the prize pool split?",
     a: "Each prediction earns a raw score of 1 / (1 + distance_km). Your payout is your share of the round pool: floor(pool × your_raw_score ÷ sum_of_raw_scores). This long-tail curve guarantees that the closest pin always wins the biggest share, while still rewarding casual players who weren't quite right — no zero-sum trap.",
   },
@@ -527,8 +746,27 @@ function SeoSection() {
             password, no tracking — and your address is your account. Real-time
             presence dots show other players' cursors as they hover the map; pin
             placements broadcast over Pusher to every connected viewer. When the
-            admin (or a future oracle) drops the answer pin, a great-circle line
-            draws from your pin to the truth and your distance badge pulses in.
+            round closes a cron queries the question's source API and posts the
+            answer pin automatically — a great-circle line draws from your pin
+            to the truth and your distance badge pulses in.
+          </p>
+          <p>
+            <strong className="text-[var(--color-text)]">Answers are not picked by a human.</strong>{" "}
+            Every question is paired with a resolver — a small PHP class that
+            knows how to fetch the truth from a public API at round-close time.
+            Today the weather questions resolve through{" "}
+            <a
+              href="https://open-meteo.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-cyan)] underline-offset-4 hover:underline"
+            >
+              Open-Meteo
+            </a>{" "}(forecast + observed archive across ~47 European capitals,
+            with hourly tie-break on 0.1°C ties); earthquakes will route through
+            the USGS FDSN feed, wildfires through NASA FIRMS, geo-tagged headlines
+            through GDELT. No admin button places the pin; the data anyone can
+            fetch from the public endpoint is the data that decides the round.
           </p>
           <p>
             Built solo as a portfolio piece for the senior full-stack surface:
