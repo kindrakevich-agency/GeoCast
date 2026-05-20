@@ -30,14 +30,17 @@ final class PredictionRepository extends ServiceEntityRepository
      * {lat, lng} pairs — no user ids, no wallets — so callers can show
      * the aggregate without leaking who placed where.
      *
+     * IDENTITY(p.round) = :roundId binding (not p.round = :entity) — same
+     * Doctrine + ULID quirk as findPagedForUser.
+     *
      * @return list<array{lat: float, lng: float}>
      */
     public function findAnonymizedPinsForRound(Round $round): array
     {
         $rows = $this->createQueryBuilder('p')
             ->select('p.lat AS lat', 'p.lng AS lng')
-            ->where('p.round = :round')
-            ->setParameter('round', $round)
+            ->where('IDENTITY(p.round) = :roundId')
+            ->setParameter('roundId', $round->getId(), 'ulid')
             ->getQuery()
             ->getArrayResult();
 
