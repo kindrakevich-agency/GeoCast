@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCareerPins } from "@/hooks/useCareerPins";
 import { useMyPredictions } from "@/hooks/useMyPredictions";
 import { ClaimableWinnings } from "@/components/profile/ClaimableWinnings";
+import { PendingReveals } from "@/components/profile/PendingReveals";
 import {
   careerPins as mockCareerPins,
   myStats,
@@ -74,6 +75,16 @@ export default function ProfilePage() {
   const resolvedRoundIds = useMemo(
     () => resolvedHistory.map((r) => r.number),
     [resolvedHistory],
+  );
+
+  // List of round numbers in {closed, open} states — used by PendingReveals
+  // to find rounds where the user has a stashed commit waiting to reveal.
+  const unresolvedRoundIds = useMemo(
+    () =>
+      liveRecentRounds
+        .filter((r) => r.status === "closed" || r.status === "open")
+        .map((r) => r.number),
+    [liveRecentRounds],
   );
 
   // Source-of-truth flags. Drives the three-state branching below.
@@ -235,6 +246,7 @@ export default function ProfilePage() {
           )}
         </motion.section>
 
+        {isAuthed && <PendingReveals roundNumbers={unresolvedRoundIds} />}
         {isAuthed && <ClaimableWinnings resolvedRoundIds={resolvedRoundIds} />}
 
         <motion.section

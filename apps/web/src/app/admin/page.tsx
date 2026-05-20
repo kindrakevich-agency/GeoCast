@@ -11,6 +11,7 @@ import { useAdminRounds } from "@/hooks/useAdminRounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateRound } from "@/hooks/useCreateRound";
 import { useOnchainRound } from "@/hooks/useOnchainRound";
+import { useResolveOnchain } from "@/hooks/useResolveOnchain";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type {
   ApiAdminRound,
@@ -332,7 +333,16 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApiResolveResponse | null>(null);
+  const [onchainTxHash, setOnchainTxHash] = useState<string | null>(null);
   const mapRef = useRef<MapRef | null>(null);
+
+  // When the round has been mirrored on-chain, the resolve flow goes via
+  // GeoCastPool.resolve(merkleRoot) signed by the admin wallet, NOT the
+  // off-chain DB resolver. The off-chain branch is kept for legacy rounds
+  // that exist only in the DB (e.g. pre-deploy).
+  const onchain = useOnchainRound(round.number);
+  const { status: resolveOnchainStatus, resolve: resolveOnchain } = useResolveOnchain();
+  const useOnchainPath = onchain.exists;
 
   // Debounced Nominatim search.
   useEffect(() => {
@@ -379,6 +389,40 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
     if (!answer) return;
     setSubmitting(true);
     setError(null);
+
+    if (useOnchainPath) {
+      // On-chain path: compute Merkle root server-side from the Revealed
+      // events, then sign GeoCastPool.resolve via the admin's wallet.
+      try {
+        const settle = await apiFetch<{
+          merkleRoot: `0x${string}`;
+          rakeMicros: number;
+          totalPayoutMicros: number;
+          leafCount: number;
+          dustMicros: number;
+          roundNumber: number;
+        }>(`/admin/rounds/${round.id}/settle`, {
+          method: "POST",
+          body: { answerLat: answer.lat, answerLng: answer.lng },
+        });
+
+        await resolveOnchain({
+          roundNumber: settle.roundNumber,
+          answerLat: answer.lat,
+          answerLng: answer.lng,
+          merkleRoot: settle.merkleRoot,
+        });
+        // The success state surfaces via resolveOnchainStatus.phase === 'done'
+        // useEffect below pumps the txHash into local state for the summary.
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Off-chain legacy path — credits.
     try {
       const data = await apiFetch<ApiResolveResponse>(`/admin/rounds/${round.id}/resolve`, {
         method: "POST",
@@ -392,6 +436,37 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
       setSubmitting(false);
     }
   };
+
+  // Pump the on-chain tx hash into local state once it lands. The summary
+  // panel below renders when result OR onchainTxHash is set.
+  useEffect(() => {
+    if (resolveOnchainStatus.phase === "done") {
+      setOnchainTxHash(resolveOnchainStatus.txHash);
+      onDone();
+    }
+    if (resolveOnchainStatus.phase === "error") {
+      setError(resolveOnchainStatus.message);
+    }
+  }, [resolveOnchainStatus, onDone]);
+
+  if (onchainTxHash) {
+    return (
+      <GlassPanel className="space-y-3 p-6">
+        <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: "var(--color-green)" }}>
+          ✓ Resolved on-chain
+        </p>
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-sm">
+          answer: {answer?.lat.toFixed(4)}, {answer?.lng.toFixed(4)}
+        </p>
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-muted)]">
+          tx: {onchainTxHash.slice(0, 10)}…{onchainTxHash.slice(-8)}
+        </p>
+        <p className="text-[10px] text-[var(--color-text-muted)]">
+          Players can now claim their USDC payouts on /me.
+        </p>
+      </GlassPanel>
+    );
+  }
 
   if (result) {
     return (
@@ -499,11 +574,25 @@ function ResolveForm({ round, onDone }: { round: ApiAdminRound; onDone: () => vo
           )}
           <button
             onClick={submit}
-            disabled={!answer || submitting}
+            disabled={!answer || submitting || resolveOnchainStatus.phase === "resolving"}
             className="w-full rounded-full border border-[var(--color-magenta)] px-4 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.22em] text-[var(--color-magenta)] transition-colors hover:bg-[var(--color-magenta)] hover:text-[var(--color-bg)] disabled:opacity-30"
           >
-            {submitting ? "resolving…" : "resolve round"}
+            {resolveOnchainStatus.phase === "resolving"
+              ? "signing on-chain resolve…"
+              : submitting
+              ? useOnchainPath
+                ? "computing merkle root…"
+                : "resolving…"
+              : useOnchainPath
+              ? "resolve on-chain (USDC)"
+              : "resolve round (credits)"}
           </button>
+          {useOnchainPath && (
+            <p className="text-[10px] text-[var(--color-text-muted)]">
+              Two-step: server computes the payout Merkle root → you sign
+              GeoCastPool.resolve via your wallet → players can claim.
+            </p>
+          )}
           {error && <p className="text-xs text-[var(--color-magenta)]">{error}</p>}
         </GlassPanel>
       </div>

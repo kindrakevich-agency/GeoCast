@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Round;
 use App\Repository\RoundRepository;
+use App\Service\Onchain\SettlementBuilder;
 use App\Service\Round\ResolveRoundService;
 use App\Service\Round\RoundService;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,6 +27,7 @@ final class AdminRoundsController
         private readonly RoundService $rounds,
         private readonly ResolveRoundService $resolver,
         private readonly RoundRepository $repo,
+        private readonly SettlementBuilder $settler,
     ) {
     }
 
@@ -84,6 +86,43 @@ final class AdminRoundsController
         $round = $this->rounds->open($round);
 
         return new JsonResponse($this->serialize($round));
+    }
+
+    /**
+     * POST /api/admin/rounds/{id}/settle
+     *
+     * Body: { answerLat, answerLng }
+     * Returns: { merkleRoot, rakeMicros, totalPayoutMicros, leafCount, dustMicros, roundNumber }
+     *
+     * Pure off-chain settler — computes the Merkle root for an on-chain
+     * round from the Revealed events already in onchain_events. Does NOT
+     * touch any DB tables outside settlement_proofs. The admin frontend
+     * then takes the returned merkleRoot and signs
+     * GeoCastPool.resolve(roundNumber, lat*1e6, lng*1e6, merkleRoot)
+     * via their wallet to post it on-chain.
+     */
+    #[Route('/admin/rounds/{id}/settle', name: 'api_admin_rounds_settle', methods: ['POST'])]
+    public function settle(string $id, Request $request): JsonResponse
+    {
+        $round = $this->loadRound($id);
+
+        $body = $this->decodeJson($request);
+        $lat = isset($body['answerLat']) && \is_numeric($body['answerLat']) ? (float) $body['answerLat'] : null;
+        $lng = isset($body['answerLng']) && \is_numeric($body['answerLng']) ? (float) $body['answerLng'] : null;
+        if ($lat === null || $lng === null) {
+            throw new BadRequestHttpException('Body must contain numeric "answerLat" and "answerLng".');
+        }
+
+        try {
+            $result = $this->settler->settle($round->getNumber(), $lat, $lng);
+        } catch (\RuntimeException $e) {
+            throw new BadRequestHttpException($e->getMessage());
+        }
+
+        return new JsonResponse([
+            ...$result,
+            'roundNumber' => $round->getNumber(),
+        ]);
     }
 
     /**
