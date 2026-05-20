@@ -132,3 +132,50 @@ export const erc20Abi = [
     outputs: [{ type: "bool" }],
   },
 ] as const;
+
+// MockUSDC — testnet faucet ABI. The `mint(to, amount)` function is public
+// (anyone can mint themselves test USDC). On Base mainnet we use Circle's
+// real USDC contract, which has no public mint — the testnet hooks check
+// the chain before calling this.
+export const mockUsdcAbi = [
+  ...erc20Abi,
+  {
+    type: "function",
+    name: "mint",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+// GeoCastPool admin-side ABI extension — round lifecycle. Kept separate
+// from the player-side ABI so non-admin pages don't pull it in.
+export const geoCastPoolAdminAbi = [
+  {
+    type: "function",
+    name: "createRound",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "roundId", type: "uint64" },
+      { name: "opensAt", type: "uint64" },
+      { name: "closesAt", type: "uint64" },
+      { name: "revealsAt", type: "uint64" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "resolve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "roundId", type: "uint64" },
+      { name: "answerLat", type: "int32" },
+      { name: "answerLng", type: "int32" },
+      { name: "merkleRoot", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+] as const;

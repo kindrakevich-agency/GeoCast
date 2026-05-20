@@ -9,6 +9,8 @@ import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { useAdminRounds } from "@/hooks/useAdminRounds";
 import { useAuth } from "@/hooks/useAuth";
+import { useCreateRound } from "@/hooks/useCreateRound";
+import { useOnchainRound } from "@/hooks/useOnchainRound";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type {
   ApiAdminRound,
@@ -16,6 +18,7 @@ import type {
   RoundStatus,
 } from "@/lib/api/types";
 import type { LngLat } from "@/lib/mock";
+import { isOnchainEnabled } from "@/lib/onchain/config";
 
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
@@ -190,6 +193,8 @@ function RoundDetail({
         </p>
       </header>
 
+      {isOnchainEnabled() && <OnchainMirrorPanel round={round} />}
+
       {round.status === "scheduled" && <OpenNowAction round={round} onDone={onChanged} />}
       {round.status === "open" && (
         <GlassPanel className="p-6">
@@ -203,6 +208,70 @@ function RoundDetail({
         <ResolvedSummary round={round} />
       )}
     </div>
+  );
+}
+
+// ---------- On-chain mirror panel ----------
+
+function OnchainMirrorPanel({ round }: { round: ApiAdminRound }) {
+  const onchain = useOnchainRound(round.number);
+  const { status, create } = useCreateRound();
+
+  if (onchain.isLoading) {
+    return null;
+  }
+
+  if (onchain.exists) {
+    return (
+      <GlassPanel className="space-y-2 p-5">
+        <p className="text-[10px] uppercase tracking-[0.25em]" style={{ color: "var(--color-green)" }}>
+          ✓ Mirrored on-chain
+        </p>
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-muted)]">
+          opens @ {new Date(onchain.opensAt * 1000).toLocaleString()} · closes @{" "}
+          {new Date(onchain.closesAt * 1000).toLocaleString()} · reveals by{" "}
+          {new Date(onchain.revealsAt * 1000).toLocaleString()}
+        </p>
+        <p className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-muted)]">
+          pool: {(Number(onchain.poolMicros) / 1_000_000).toFixed(2)} USDC
+          {onchain.resolvedAt > 0 && ` · resolved @ ${new Date(onchain.resolvedAt * 1000).toLocaleString()}`}
+        </p>
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel className="flex items-center justify-between gap-6 p-5">
+      <div className="flex-1">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
+          Not yet on-chain
+        </p>
+        <p className="mt-1 text-sm">
+          Mirror this round to GeoCastPool so players can commit with USDC.
+        </p>
+      </div>
+      <button
+        onClick={async () => {
+          // Reveal window: 6h after close (matches docs/game.md §4).
+          const opensAt = Math.floor(new Date(round.opensAt).getTime() / 1000);
+          const closesAt = Math.floor(new Date(round.closesAt).getTime() / 1000);
+          const revealsAt = closesAt + 6 * 3600;
+          await create({
+            roundNumber: round.number,
+            opensAt,
+            closesAt,
+            revealsAt,
+          });
+        }}
+        disabled={status.phase === "creating"}
+        className="rounded-full border border-[var(--color-magenta)] px-5 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.22em] text-[var(--color-magenta)] transition-colors hover:bg-[var(--color-magenta)] hover:text-[var(--color-bg)] disabled:opacity-50"
+      >
+        {status.phase === "creating" ? "creating…" : "create on-chain →"}
+      </button>
+      {status.phase === "error" && (
+        <p className="text-xs text-[var(--color-magenta)]">{status.message}</p>
+      )}
+    </GlassPanel>
   );
 }
 

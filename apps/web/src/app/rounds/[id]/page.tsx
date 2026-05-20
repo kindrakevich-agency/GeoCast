@@ -15,12 +15,18 @@ import { SidePanel } from "@/components/round/SidePanel";
 import { TopBar } from "@/components/round/TopBar";
 import { useCurrentRound } from "@/hooks/useCurrentRound";
 import { useAuth } from "@/hooks/useAuth";
+import { useCommitBet } from "@/hooks/useCommitBet";
+import { useMintTestUsdc } from "@/hooks/useMintTestUsdc";
+import { useOnchainRound } from "@/hooks/useOnchainRound";
 import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
 import { useRoundPins } from "@/hooks/useRoundPins";
+import { useUsdcBalance } from "@/hooks/useUsdcBalance";
 import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
 import type { ApiPlacePredictionResponse, ApiPrediction } from "@/lib/api/types";
 import { demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
+import { isOnchainEnabled, getOnchainConfig } from "@/lib/onchain/config";
+import { baseSepolia } from "viem/chains";
 
 /**
  * Active round screen.
@@ -230,6 +236,36 @@ export default function ActiveRoundPage() {
   // Anonymous users / demo round → local-only mock placement.
   const shouldHitApi = isAuthed && usingLive;
 
+  // ---------- On-chain commit (v2) ----------
+  //
+  // When isOnchainEnabled() AND the round has been mirrored to GeoCastPool
+  // via admin createRound(), the click-to-place flow swaps from POST
+  // /predictions → wagmi commitBet. Falls back transparently to the credit
+  // POST when any precondition isn't met, so this code is safe to ship
+  // before all rounds are mirrored.
+  const onchainCfg = getOnchainConfig();
+  const onchain = useOnchainRound(usingLive ? round.number : null);
+  const { balance: usdcBalance, refetch: refetchUsdc } = useUsdcBalance();
+  const { status: commitStatus, commit: onchainCommit } = useCommitBet(round.number);
+  const { status: mintStatus, mint: onchainMint } = useMintTestUsdc();
+  const shouldUseOnchain =
+    isOnchainEnabled() && isAuthed && usingLive && onchain.exists;
+  const usdcShortfall = shouldUseOnchain && usdcBalance < onchainCfg.betMicros;
+  const isTestnet = onchainCfg.chainId === baseSepolia.id;
+
+  // Reflect the wagmi commit phase back into the page's submit-status UI.
+  useEffect(() => {
+    if (commitStatus.phase === "approving") setSubmitError("approving USDC…");
+    else if (commitStatus.phase === "committing") setSubmitError("waiting for on-chain commit…");
+    else if (commitStatus.phase === "done") {
+      // setMyPin was already set optimistically in onConfirm — confirm tx hash.
+      setSubmitError(null);
+      setPending(null);
+    } else if (commitStatus.phase === "error") {
+      setSubmitError(commitStatus.message);
+    }
+  }, [commitStatus]);
+
   const onConfirm = async () => {
     if (!pending) return;
     const coords = pending;
@@ -242,6 +278,27 @@ export default function ActiveRoundPage() {
 
     setSubmitting(true);
     setSubmitError(null);
+
+    if (shouldUseOnchain) {
+      // Branch A — on-chain. Pin is shown optimistically; if the tx
+      // ultimately reverts the useEffect on commitStatus.error surfaces
+      // the wallet's error message and we keep the pin (user can
+      // discard or retry — UX TBD).
+      setMyPin(coords);
+      try {
+        await onchainCommit(coords);
+        // Optimistically bump the pool count — backend cron will reconcile
+        // on the next onchain:sync tick.
+        setLiveParticipants((n) => (n ?? 0) + 1);
+      } catch {
+        // Errors surface via commitStatus.error → useEffect → submitError.
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Branch B — existing credit flow.
     try {
       const result = await apiFetch<ApiPlacePredictionResponse>(
         `/rounds/${round.id}/predictions`,
@@ -363,13 +420,38 @@ export default function ActiveRoundPage() {
       {resolved && <ClaimBar payout={myPayout} />}
 
       {/* Source-of-truth indicator */}
-      <div className="pointer-events-none fixed bottom-2 left-2 z-50 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-50">
+      <div className="pointer-events-none fixed bottom-2 left-2 z-50 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-60">
         {isLoading
           ? "loading…"
           : usingLive
-          ? `api · round #${round.number} · ${shouldHitApi ? "signed in" : "demo mode (sign in to play)"}`
+          ? `round #${round.number} · ${shouldUseOnchain ? "on-chain · $1 USDC" : shouldHitApi ? "signed in · 1 credit" : "demo mode (sign in to play)"}`
           : "mock data"}
       </div>
+
+      {/* Test-USDC mint affordance — visible when on-chain is enabled, the user is
+          signed in, doesn't have enough USDC, and we're on a testnet chain. */}
+      {usdcShortfall && isTestnet && !placed && (
+        <button
+          onClick={async () => {
+            await onchainMint(100_000_000n); // 100 USDC of test funds
+            refetchUsdc();
+          }}
+          disabled={mintStatus.phase === "minting"}
+          className="pointer-events-auto fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-amber)] bg-black/60 px-5 py-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] uppercase tracking-[0.22em] text-[var(--color-amber)] backdrop-blur-md transition-colors hover:bg-[var(--color-amber)] hover:text-[var(--color-bg)] disabled:opacity-50"
+        >
+          {mintStatus.phase === "minting"
+            ? "minting…"
+            : `low USDC · mint 100 test USDC →`}
+        </button>
+      )}
+
+      {/* "Round not yet on-chain" warning — when the global config has a pool
+          address but THIS round hasn't been mirrored via createRound yet. */}
+      {isOnchainEnabled() && isAuthed && usingLive && !onchain.exists && !onchain.isLoading && !placed && (
+        <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-border)] bg-black/60 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md">
+          round #{round.number} not yet mirrored on-chain · falling back to credits
+        </div>
+      )}
 
     </main>
   );
