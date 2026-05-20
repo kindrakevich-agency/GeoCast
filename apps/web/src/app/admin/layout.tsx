@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { SuggestionsPanel } from "@/components/admin/SuggestionsPanel";
 import { useAdminRounds } from "@/hooks/useAdminRounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnchainRound } from "@/hooks/useOnchainRound";
@@ -82,6 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="grid h-[calc(100vh-49px)] grid-cols-[320px_1fr]">
           {/* Sidebar */}
           <aside className="flex flex-col overflow-hidden border-r border-[var(--color-border)] bg-black/20">
+            <SuggestionsPanel onChange={refetch} />
             <div className="border-b border-[var(--color-border)] bg-black/40 p-3 backdrop-blur-md">
               <input
                 type="text"

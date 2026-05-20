@@ -157,6 +157,7 @@ final class RoundsController
             'totalParticipants' => $round->getTotalParticipants(),
             'status' => $round->getStatus()->value,
             'answer' => $answer,
+            'answerPoints' => $round->getAnswerPoints(),
         ];
     }
 }

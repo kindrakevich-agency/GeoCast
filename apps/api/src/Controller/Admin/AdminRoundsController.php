@@ -178,11 +178,15 @@ final class AdminRoundsController
             'description' => $round->getDescription(),
             'opensAt' => $round->getOpensAt()->format(\DateTimeInterface::ATOM),
             'closesAt' => $round->getClosesAt()->format(\DateTimeInterface::ATOM),
+            'resolvesAt' => $round->getResolvesAt()?->format(\DateTimeInterface::ATOM),
             'resolvedAt' => $round->getResolvedAt()?->format(\DateTimeInterface::ATOM),
             'poolCredits' => $round->getPoolCredits(),
             'totalParticipants' => $round->getTotalParticipants(),
             'status' => $round->getStatus()->value,
             'answer' => $answer,
+            'answerPoints' => $round->getAnswerPoints(),
+            'autoResolverCode' => $round->getAutoResolverCode(),
+            'autoResolverParams' => $round->getAutoResolverParams(),
         ];
     }
 

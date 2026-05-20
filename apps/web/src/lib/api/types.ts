@@ -13,11 +13,21 @@ export type ApiRound = {
   description: string | null;
   opensAt: string;        // ISO 8601
   closesAt: string;       // ISO 8601
+  resolvesAt?: string | null;
   resolvedAt?: string | null;
   poolCredits: number;
   totalParticipants: number;
   status: RoundStatus;
   answer: LngLat | null;
+  /**
+   * Set on resolved rounds that had multiple winners (ties). When non-null,
+   * `answer` mirrors the first entry; multi-winner rendering should iterate
+   * over this list instead.
+   */
+  answerPoints?: Array<{ lat: number; lng: number; name: string }> | null;
+  /** Auto-resolver fields — populated when a round was published from a Suggestion. */
+  autoResolverCode?: string | null;
+  autoResolverParams?: Record<string, unknown> | null;
 };
 
 export type ApiUser = {

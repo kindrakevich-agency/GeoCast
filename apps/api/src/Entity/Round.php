@@ -62,6 +62,29 @@ class Round
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $resolvedAt = null;
 
+    /**
+     * Optional auto-resolver wiring. When set, app:rounds:auto-resolve runs
+     * the matching resolver at resolvesAt and posts the answer automatically.
+     * NULL = admin-resolved (the original flow).
+     */
+    #[ORM\Column(type: 'string', length: 64, nullable: true)]
+    private ?string $autoResolverCode = null;
+
+    /** @var array<string, mixed>|null */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $autoResolverParams = null;
+
+    /**
+     * Multi-winner answer support. NULL = legacy single-winner round
+     * (use answerLat/answerLng). Otherwise [[lat,lng,name], …]; the first
+     * entry mirrors answerLat/answerLng for back-compat with single-answer
+     * code paths.
+     *
+     * @var list<array{lat: float, lng: float, name: string}>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $answerPoints = null;
+
     public function __construct(int $number, string $question, \DateTimeImmutable $opensAt, \DateTimeImmutable $closesAt)
     {
         $this->id = new Ulid();
@@ -98,4 +121,17 @@ class Round
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getResolvedAt(): ?\DateTimeImmutable { return $this->resolvedAt; }
     public function setResolvedAt(?\DateTimeImmutable $resolvedAt): self { $this->resolvedAt = $resolvedAt; return $this; }
+
+    public function getAutoResolverCode(): ?string { return $this->autoResolverCode; }
+    public function setAutoResolverCode(?string $code): self { $this->autoResolverCode = $code; return $this; }
+
+    /** @return array<string, mixed>|null */
+    public function getAutoResolverParams(): ?array { return $this->autoResolverParams; }
+    /** @param array<string, mixed>|null $params */
+    public function setAutoResolverParams(?array $params): self { $this->autoResolverParams = $params; return $this; }
+
+    /** @return list<array{lat: float, lng: float, name: string}>|null */
+    public function getAnswerPoints(): ?array { return $this->answerPoints; }
+    /** @param list<array{lat: float, lng: float, name: string}>|null $points */
+    public function setAnswerPoints(?array $points): self { $this->answerPoints = $points; return $this; }
 }

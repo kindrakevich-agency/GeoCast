@@ -64,4 +64,23 @@ final class RoundRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Closed rounds with an auto_resolver_code whose resolves_at has passed
+     * — ready for app:rounds:auto-resolve to call the resolver.
+     *
+     * @return Round[]
+     */
+    public function findDueForAutoResolve(\DateTimeImmutable $now): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->andWhere('r.autoResolverCode IS NOT NULL')
+            ->andWhere('r.resolvesAt IS NOT NULL')
+            ->andWhere('r.resolvesAt <= :now')
+            ->setParameter('status', RoundStatus::Closed)
+            ->setParameter('now', $now)
+            ->getQuery()
+            ->getResult();
+    }
 }

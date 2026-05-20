@@ -31,7 +31,50 @@ final class RoundService
         \DateTimeImmutable $closesAt,
         ?string $description = null,
     ): Round {
-        return $this->em->wrapInTransaction(function () use ($question, $opensAt, $closesAt, $description): Round {
+        return $this->createInternal($question, $opensAt, $closesAt, null, $description, null, null);
+    }
+
+    /**
+     * Same as create(), but wires an auto-resolver into the new round.
+     * Used when an admin accepts a RoundSuggestion.
+     *
+     * @param array<string, mixed> $autoResolverParams
+     */
+    public function createWithAutoResolver(
+        string $question,
+        \DateTimeImmutable $opensAt,
+        \DateTimeImmutable $closesAt,
+        \DateTimeImmutable $resolvesAt,
+        string $autoResolverCode,
+        array $autoResolverParams,
+        ?string $description = null,
+    ): Round {
+        return $this->createInternal(
+            $question,
+            $opensAt,
+            $closesAt,
+            $resolvesAt,
+            $description,
+            $autoResolverCode,
+            $autoResolverParams,
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $autoResolverParams
+     */
+    private function createInternal(
+        string $question,
+        \DateTimeImmutable $opensAt,
+        \DateTimeImmutable $closesAt,
+        ?\DateTimeImmutable $resolvesAt,
+        ?string $description,
+        ?string $autoResolverCode,
+        ?array $autoResolverParams,
+    ): Round {
+        return $this->em->wrapInTransaction(function () use (
+            $question, $opensAt, $closesAt, $resolvesAt, $description, $autoResolverCode, $autoResolverParams
+        ): Round {
             // DQL is stricter than SQL — `MAX(x) + 1` doesn't parse. Pull MAX, add in PHP.
             $max = $this->rounds->createQueryBuilder('r')
                 ->select('MAX(r.number)')
@@ -42,6 +85,13 @@ final class RoundService
             $round = new Round($next, $question, $opensAt, $closesAt);
             if ($description !== null) {
                 $round->setDescription($description);
+            }
+            if ($resolvesAt !== null) {
+                $round->setResolvesAt($resolvesAt);
+            }
+            if ($autoResolverCode !== null) {
+                $round->setAutoResolverCode($autoResolverCode);
+                $round->setAutoResolverParams($autoResolverParams);
             }
             $this->em->persist($round);
             $this->em->flush();
