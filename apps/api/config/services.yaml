@@ -46,3 +46,18 @@ services:
             $key:     '%env(PUSHER_KEY)%'
             $secret:  '%env(PUSHER_SECRET)%'
             $cluster: '%env(PUSHER_CLUSTER)%'
+
+    # ---------- On-chain (v2) ----------
+    # EthRpcClient is bound to BASE_RPC_URL — defaults to the public RPC,
+    # which is fine for low-traffic sync. Swap to Alchemy when needed.
+    App\Service\Onchain\EthRpcClient:
+        arguments:
+            $rpcUrl: '%env(BASE_RPC_URL)%'
+
+    # OnchainSync no-ops when GEOCAST_POOL_ADDRESS is empty / 0x0… so it's
+    # safe to wire in before the contract is deployed.
+    App\Service\Onchain\OnchainSync:
+        arguments:
+            $chainId: '%env(int:GEOCAST_CHAIN_ID)%'
+            $contractAddress: '%env(GEOCAST_POOL_ADDRESS)%'
+            $genesisBlock: '%env(int:GEOCAST_POOL_GENESIS_BLOCK)%'
