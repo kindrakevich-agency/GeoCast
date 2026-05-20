@@ -248,8 +248,26 @@ export default function ActiveRoundPage() {
   const { balance: usdcBalance, refetch: refetchUsdc } = useUsdcBalance();
   const { status: commitStatus, commit: onchainCommit } = useCommitBet(round.number);
   const { status: mintStatus, mint: onchainMint } = useMintTestUsdc();
+
+  // The contract's commitBet() requires `opensAt ≤ block.timestamp < closesAt`.
+  // Wall-clock-tick this so the gate flips on without a reload at exactly
+  // the moment the on-chain window opens.
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const id = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  const onchainCommitOpen =
+    onchain.exists && nowSec >= onchain.opensAt && nowSec < onchain.closesAt;
+  const onchainNotYetOpen = onchain.exists && nowSec < onchain.opensAt;
+  const onchainAlreadyClosed = onchain.exists && nowSec >= onchain.closesAt;
+
+  // Use the on-chain path only when the round is mirrored AND we're inside
+  // the contract's commit window. Outside it (not-yet-open or already-closed),
+  // fall back to the off-chain credit POST so players aren't stuck staring at
+  // a red MetaMask alert with no actionable path forward.
   const shouldUseOnchain =
-    isOnchainEnabled() && isAuthed && usingLive && onchain.exists;
+    isOnchainEnabled() && isAuthed && usingLive && onchainCommitOpen;
   const usdcShortfall = shouldUseOnchain && usdcBalance < onchainCfg.betMicros;
   const isTestnet = onchainCfg.chainId === baseSepolia.id;
 
@@ -458,6 +476,20 @@ export default function ActiveRoundPage() {
       {isOnchainEnabled() && isAuthed && usingLive && !onchain.exists && !onchain.isLoading && !placed && (
         <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-border)] bg-black/60 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md">
           round #{round.number} not yet mirrored on-chain · falling back to credits
+        </div>
+      )}
+
+      {/* On-chain mirrored but the commit window is closed (not yet open OR
+          already past). Players can still play via credits in the meantime,
+          but they deserve to know why MetaMask refuses to simulate. */}
+      {isOnchainEnabled() && isAuthed && usingLive && !placed && onchainNotYetOpen && (
+        <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-amber)]/40 bg-black/70 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-amber)] backdrop-blur-md">
+          on-chain window opens {new Date(onchain.opensAt * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })} · placing via credits for now
+        </div>
+      )}
+      {isOnchainEnabled() && isAuthed && usingLive && !placed && onchainAlreadyClosed && onchain.resolvedAt === 0 && (
+        <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-magenta)]/40 bg-black/70 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-magenta)] backdrop-blur-md">
+          on-chain commit window closed · only credit placements accepted
         </div>
       )}
 
