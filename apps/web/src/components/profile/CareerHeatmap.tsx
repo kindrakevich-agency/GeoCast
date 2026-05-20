@@ -13,16 +13,28 @@ export function CareerHeatmap({ pins }: { pins: CareerPin[] }) {
       features: pins.map((p) => ({
         type: "Feature" as const,
         geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
-        properties: { intensity: 1 / (1 + p.distanceKm / 200) },
+        // Unresolved pins (distanceKm: null) contribute a small ambient
+        // intensity so they show on the heatmap but don't bias the gradient.
+        properties: {
+          intensity: p.distanceKm !== null ? 1 / (1 + p.distanceKm / 200) : 0.25,
+        },
       })),
     }),
     [pins],
   );
 
-  // Best pin (smallest distance) gets a magenta crown
-  const best = useMemo(
-    () => pins.reduce((acc, p) => (p.distanceKm < acc.distanceKm ? p : acc), pins[0]),
+  // Best pin (smallest distance) gets a magenta crown — only resolved pins
+  // are eligible, since unresolved ones have no distance yet.
+  const resolvedPins = useMemo(
+    () => pins.filter((p): p is CareerPin & { distanceKm: number } => p.distanceKm !== null),
     [pins],
+  );
+  const best = useMemo(
+    () =>
+      resolvedPins.length > 0
+        ? resolvedPins.reduce((acc, p) => (p.distanceKm < acc.distanceKm ? p : acc), resolvedPins[0])
+        : null,
+    [resolvedPins],
   );
 
   return (
@@ -72,20 +84,22 @@ export function CareerHeatmap({ pins }: { pins: CareerPin[] }) {
           </Marker>
         ))}
 
-        <Marker longitude={best.lng} latitude={best.lat} anchor="center">
-          <span className="relative grid place-items-center">
-            <span
-              className="absolute h-5 w-5 rounded-full"
-              style={{
-                background: "radial-gradient(circle, rgba(255, 0, 110, 0.6) 0%, rgba(255, 0, 110, 0) 70%)",
-              }}
-            />
-            <span
-              className="block h-1.5 w-1.5 rounded-full"
-              style={{ background: "var(--color-magenta)", boxShadow: "0 0 12px var(--color-magenta)" }}
-            />
-          </span>
-        </Marker>
+        {best && (
+          <Marker longitude={best.lng} latitude={best.lat} anchor="center">
+            <span className="relative grid place-items-center">
+              <span
+                className="absolute h-5 w-5 rounded-full"
+                style={{
+                  background: "radial-gradient(circle, rgba(255, 0, 110, 0.6) 0%, rgba(255, 0, 110, 0) 70%)",
+                }}
+              />
+              <span
+                className="block h-1.5 w-1.5 rounded-full"
+                style={{ background: "var(--color-magenta)", boxShadow: "0 0 12px var(--color-magenta)" }}
+              />
+            </span>
+          </Marker>
+        )}
       </Map>
 
       <div
@@ -99,10 +113,12 @@ export function CareerHeatmap({ pins }: { pins: CareerPin[] }) {
       <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/40 px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)] backdrop-blur-md">
         Career heatmap · {pins.length} pins
       </div>
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/40 px-2.5 py-1 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)] backdrop-blur-md">
-        <span style={{ color: "var(--color-magenta)" }}>●</span> best:{" "}
-        <span style={{ color: "var(--color-text)" }}>{best.distanceKm.toFixed(1)} km</span>
-      </div>
+      {best && (
+        <div className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/40 px-2.5 py-1 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)] backdrop-blur-md">
+          <span style={{ color: "var(--color-magenta)" }}>●</span> best:{" "}
+          <span style={{ color: "var(--color-text)" }}>{best.distanceKm.toFixed(1)} km</span>
+        </div>
+      )}
     </div>
   );
 }

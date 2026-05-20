@@ -6,6 +6,7 @@ import type { PastRound } from "@/lib/profile-mock";
 
 export function RecentRoundCard({ round, index }: { round: PastRound; index: number }) {
   const isResolved = round.rank !== null && round.distanceKm !== null;
+  const isClosed = !isResolved && round.status === "closed";
   const top10 = isResolved && (round.rank as number) <= 10;
   const top3 = isResolved && (round.rank as number) <= 3;
   const formattedDistance = isResolved
@@ -41,8 +42,10 @@ export function RecentRoundCard({ round, index }: { round: PastRound; index: num
               {round.date} ·{" "}
               {isResolved && round.answerLabel ? (
                 <>answer: <span className="text-[var(--color-text)]">{round.answerLabel}</span></>
+              ) : isClosed ? (
+                <span style={{ color: "var(--color-amber)" }}>closed · awaiting admin reveal</span>
               ) : (
-                <span style={{ color: "var(--color-amber)" }}>round in progress</span>
+                <span style={{ color: "var(--color-cyan)" }}>round open · pin placed</span>
               )}
             </p>
           </div>
@@ -78,16 +81,16 @@ export function RecentRoundCard({ round, index }: { round: PastRound; index: num
               <Cell label="status">
                 <span
                   className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]"
-                  style={{ color: "var(--color-amber)" }}
+                  style={{ color: isClosed ? "var(--color-amber)" : "var(--color-cyan)" }}
                 >
                   <span
                     className="inline-block h-1 w-1 animate-pulse rounded-full"
                     style={{
-                      background: "var(--color-amber)",
-                      boxShadow: "0 0 6px var(--color-amber)",
+                      background: isClosed ? "var(--color-amber)" : "var(--color-cyan)",
+                      boxShadow: `0 0 6px ${isClosed ? "var(--color-amber)" : "var(--color-cyan)"}`,
                     }}
                   />
-                  awaiting reveal
+                  {isClosed ? "awaiting reveal" : "round open"}
                 </span>
               </Cell>
             )}

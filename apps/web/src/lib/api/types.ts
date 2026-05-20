@@ -86,7 +86,8 @@ export type ApiCareerPin = {
   lng: number;
   lat: number;
   roundNumber: number;
-  distanceKm: number;
+  /** Null for pins on rounds that haven't been resolved yet. */
+  distanceKm: number | null;
 };
 
 export type ApiPredictionHistoryItem = {

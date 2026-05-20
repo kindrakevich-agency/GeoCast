@@ -14,12 +14,15 @@ export type CareerStats = {
   pinsPerWeek: number;
 };
 
-export type CareerPin = LngLat & { roundNumber: number; distanceKm: number };
+export type CareerPin = LngLat & { roundNumber: number; distanceKm: number | null };
 
 export type PastRound = {
   number: number;
   question: string;
   date: string;          // YYYY-MM-DD
+  /** Mirrors the API's round.status: "open" | "closed" | "resolved" | "scheduled".
+   *  Drives the timeline card's status pill (open vs closed-awaiting-reveal). */
+  status?: "open" | "closed" | "resolved" | "scheduled";
   myPin: LngLat;
   totalPlayers: number;
   /** Null on rounds that haven't been resolved yet — caller renders an

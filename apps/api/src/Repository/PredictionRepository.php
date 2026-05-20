@@ -79,13 +79,14 @@ final class PredictionRepository extends ServiceEntityRepository
     }
 
     /**
-     * Career heatmap data — every resolved pin the user has ever dropped.
-     * Returns just the four columns the frontend needs; skips Doctrine
-     * entity hydration so this is cheap even at high pin counts.
+     * Career heatmap data — every pin the user has ever dropped, regardless
+     * of round status. distanceKm is null for predictions on rounds that
+     * haven't been resolved yet; the frontend renders those as plain points
+     * without contributing to the "best" highlight.
      *
      * Same IDENTITY()-based binding as findPagedForUser — see the note there.
      *
-     * @return list<array{lng: float, lat: float, roundNumber: int, distanceKm: float}>
+     * @return list<array{lng: float, lat: float, roundNumber: int, distanceKm: float|null}>
      */
     public function findResolvedPinsForUser(User $user): array
     {
@@ -93,7 +94,6 @@ final class PredictionRepository extends ServiceEntityRepository
             ->select('p.lng AS lng', 'p.lat AS lat', 'r.number AS roundNumber', 'p.distanceKm AS distanceKm')
             ->innerJoin('p.round', 'r')
             ->where('IDENTITY(p.user) = :userId')
-            ->andWhere('p.distanceKm IS NOT NULL')
             ->setParameter('userId', $user->getId(), 'ulid')
             ->orderBy('p.placedAt', 'DESC')
             ->getQuery()
@@ -103,7 +103,7 @@ final class PredictionRepository extends ServiceEntityRepository
             'lng' => (float) $r['lng'],
             'lat' => (float) $r['lat'],
             'roundNumber' => (int) $r['roundNumber'],
-            'distanceKm' => (float) $r['distanceKm'],
+            'distanceKm' => $r['distanceKm'] !== null ? (float) $r['distanceKm'] : null,
         ], $rows);
     }
 }

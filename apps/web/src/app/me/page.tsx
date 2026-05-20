@@ -48,6 +48,7 @@ export default function ProfilePage() {
       number: it.round.number,
       question: it.round.question,
       date: it.placedAt.slice(0, 10),
+      status: it.round.status,
       myPin: it.myPin,
       totalPlayers: it.round.totalParticipants,
       answerLabel: it.round.answer
@@ -80,7 +81,9 @@ export default function ProfilePage() {
     && (history?.items.length ?? 0) === 0;
   // Render the "you haven't played" CTA only when we've confirmed empty —
   // otherwise show the demo (mock) while hooks are still settling so the
-  // page never looks broken.
+  // page never looks broken. The heatmap empty-state fires only when the
+  // user has zero pins ever (resolved or not); a user with an active pin
+  // sees the heatmap with that pin on it.
   const showEmptyHistory = isAuthed && historySettled && liveRecentRounds.length === 0;
   const showEmptyPins = isAuthed && pinsSettled && (livePins?.length ?? 0) === 0;
 
