@@ -11,8 +11,8 @@ use App\Service\User\UserProvisioner;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class VerifyController
@@ -50,7 +50,15 @@ final class VerifyController
         try {
             $parsed = $this->verifier->verify($message, $signature);
         } catch (SiweVerificationException $e) {
-            throw new UnauthorizedHttpException('SIWE', $e->getMessage(), $e);
+            // Return JSON with the actual reason so the frontend can surface
+            // it ("Chain ID 84532 not in allowlist", "nonce expired", etc.).
+            // Symfony's default UnauthorizedHttpException → text/html template
+            // loses the message in prod, leaving the UI showing a generic
+            // "Sign-in failed" with no actionable info.
+            return new JsonResponse(
+                ['error' => 'unauthorized', 'detail' => $e->getMessage()],
+                Response::HTTP_UNAUTHORIZED,
+            );
         }
 
         $user = $this->provisioner->findOrCreate($parsed->address);
