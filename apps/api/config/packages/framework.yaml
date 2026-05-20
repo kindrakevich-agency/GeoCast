@@ -2,6 +2,14 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # Force UTC for all date-handling inside this app — calls
+    # date_default_timezone_set('UTC') during Kernel boot. Belt-and-braces
+    # with .user.ini (HTTP) and bin/console (CLI); also covers in-process
+    # test runners and edge cases where the boot fires before either of
+    # those takes effect. Scoped to this app's Kernel only — no impact on
+    # co-tenants on the same FPM pool.
+    default_timezone: 'UTC'
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 

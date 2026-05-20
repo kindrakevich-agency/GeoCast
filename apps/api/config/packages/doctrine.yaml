@@ -8,6 +8,16 @@ doctrine:
 
         profiling_collect_backtrace: '%kernel.debug%'
         use_savepoints: true
+
+        # Force the MariaDB session timezone to UTC for every new connection
+        # opened by this app. The shared MariaDB is on @@system_time_zone =
+        # CET, and Doctrine's datetime_immutable type writes naive Y-m-d H:i:s
+        # strings — without this, a UTC DateTimeImmutable would be stored
+        # as-is and read back as Berlin time, shifting every persisted
+        # timestamp by 2h. Key 1002 is PDO::MYSQL_ATTR_INIT_COMMAND; only
+        # affects this app's connections (Tripsquick/Settle keep theirs).
+        options:
+            1002: "SET time_zone='+00:00'"
     orm:
         auto_generate_proxy_classes: true
         enable_lazy_ghost_objects: true
