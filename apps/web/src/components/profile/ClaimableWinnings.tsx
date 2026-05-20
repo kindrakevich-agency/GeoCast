@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { useClaim } from "@/hooks/useClaim";
@@ -14,14 +14,13 @@ import { isOnchainEnabled } from "@/lib/onchain/config";
  *
  * The parent passes in the list of resolved roundNumbers from
  * useMyPredictions — that's the bridge between off-chain history and
- * on-chain claim state.
+ * on-chain claim state. When no resolved round has a non-zero proof we
+ * still render the section with an explicit empty state, so the user
+ * understands the feature is wired and there's just nothing to claim.
  */
 export function ClaimableWinnings({ resolvedRoundIds }: { resolvedRoundIds: number[] }) {
   if (!isOnchainEnabled()) {
     // Contract not deployed yet — render nothing. No fake claim UI.
-    return null;
-  }
-  if (resolvedRoundIds.length === 0) {
     return null;
   }
 
@@ -30,19 +29,86 @@ export function ClaimableWinnings({ resolvedRoundIds }: { resolvedRoundIds: numb
       <h2 className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
         Claimable winnings
       </h2>
-      <ul className="space-y-2">
-        {resolvedRoundIds.map((roundId) => (
-          <ClaimableRowFetcher key={roundId} roundId={roundId} />
-        ))}
-      </ul>
+      <ClaimableBody resolvedRoundIds={resolvedRoundIds} />
     </section>
   );
 }
 
-function ClaimableRowFetcher({ roundId }: { roundId: number }) {
+function ClaimableBody({ resolvedRoundIds }: { resolvedRoundIds: number[] }) {
+  // Visibility callback pattern — each row reports whether it'll render
+  // a card (i.e. the user has a non-zero claim for that round). Until
+  // every row has reported, we hold off on the empty state to avoid
+  // flashing it before the server returns proofs.
+  const [visibility, setVisibility] = useState<Record<number, boolean>>({});
+
+  const setVisible = useCallback((id: number, v: boolean) => {
+    setVisibility((prev) => (prev[id] === v ? prev : { ...prev, [id]: v }));
+  }, []);
+
+  const reported = Object.keys(visibility).length;
+  const visibleCount = Object.values(visibility).filter(Boolean).length;
+  const settled = reported >= resolvedRoundIds.length;
+
+  if (resolvedRoundIds.length === 0) {
+    return (
+      <EmptyState>
+        Nothing to claim yet. After you place a pin and a round resolves,
+        any USDC winnings will show up here ready to claim.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <>
+      <ul className="space-y-2">
+        {resolvedRoundIds.map((id) => (
+          <ClaimableRowFetcher
+            key={id}
+            roundId={id}
+            onVisibilityChange={setVisible}
+          />
+        ))}
+      </ul>
+      {settled && visibleCount === 0 && (
+        <EmptyState>
+          No claimable winnings right now. Resolved rounds where your pin
+          earned a payout will surface here automatically.
+        </EmptyState>
+      )}
+    </>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <GlassPanel className="p-4">
+      <p className="text-sm text-[var(--color-text-muted)]">{children}</p>
+    </GlassPanel>
+  );
+}
+
+function ClaimableRowFetcher({
+  roundId,
+  onVisibilityChange,
+}: {
+  roundId: number;
+  onVisibilityChange: (id: number, visible: boolean) => void;
+}) {
   const { proof, isLoading } = useClaimProof(roundId);
-  if (isLoading || proof === null) return null;
-  if (BigInt(proof.amount) === 0n) return null; // 0-payout pin — skip
+
+  // A row "exists" when we have a proof with a non-zero amount. Report
+  // both negative and positive results so the parent can compute the
+  // settled-with-no-claims state.
+  const hasClaim =
+    !isLoading && proof !== null && BigInt(proof.amount) !== 0n;
+  const determined = !isLoading;
+
+  useEffect(() => {
+    if (!determined) return;
+    onVisibilityChange(roundId, hasClaim);
+  }, [determined, hasClaim, roundId, onVisibilityChange]);
+
+  if (!hasClaim || !proof) return null;
   return <ClaimableRow proof={proof} />;
 }
 
