@@ -1,6 +1,14 @@
 #!/usr/bin/env php
 <?php
 
+// CLI counterpart to .user.ini — bin/console runs through the PHP CLI binary
+// which reads /www/server/php/83/etc/php.ini (Berlin on the prod box) and
+// IGNORES .user.ini. Pinning here keeps the crons (app:rounds:tick,
+// app:onchain:sync, app:rounds:auto-resolve, app:questions:suggest) on UTC
+// regardless of the OS / php.ini setting. Process-scoped, only affects this
+// single command invocation.
+date_default_timezone_set('UTC');
+
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArgvInput;
