@@ -66,6 +66,11 @@ export function useCreateRound(): {
           ],
           chainId: targetChain,
         });
+        // Wait for the chain to actually include the tx before flipping
+        // status to "done". Without this, the UI's onchain.refetch() call
+        // races the tx propagation and the panel stays on "Not yet on-chain"
+        // until the user manually reloads.
+        await waitForReceipt(txHash);
         setStatus({ phase: "done", txHash });
       } catch (e) {
         setStatus({
@@ -78,4 +83,10 @@ export function useCreateRound(): {
   );
 
   return { status, create };
+}
+
+async function waitForReceipt(hash: Hex): Promise<void> {
+  const { waitForTransactionReceipt } = await import("wagmi/actions");
+  const { wagmiConfig } = await import("@/lib/wagmi");
+  await waitForTransactionReceipt(wagmiConfig, { hash });
 }

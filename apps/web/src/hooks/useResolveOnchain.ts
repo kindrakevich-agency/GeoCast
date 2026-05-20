@@ -61,6 +61,7 @@ export function useResolveOnchain(): {
           ],
           chainId: targetChain,
         });
+        await waitForReceipt(txHash);
         setStatus({ phase: "done", txHash });
       } catch (e) {
         setStatus({
@@ -73,4 +74,10 @@ export function useResolveOnchain(): {
   );
 
   return { status, resolve };
+}
+
+async function waitForReceipt(hash: Hex): Promise<void> {
+  const { waitForTransactionReceipt } = await import("wagmi/actions");
+  const { wagmiConfig } = await import("@/lib/wagmi");
+  await waitForTransactionReceipt(wagmiConfig, { hash });
 }
