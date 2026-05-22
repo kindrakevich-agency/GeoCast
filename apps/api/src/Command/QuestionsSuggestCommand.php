@@ -167,10 +167,17 @@ final class QuestionsSuggestCommand extends Command
             }
 
             // Continuous mode: re-timestamp the draft so the round chains
-            // directly off the previous round's closes_at.
+            // directly off the previous round's closes_at. resolvesAt sits
+            // 5 minutes after closesAt — that's the on-chain reveal window
+            // (GeoCastPool.createRound rejects revealsAt <= closesAt) and
+            // gives the auto-resolve cron headroom for archive lag. The
+            // NEXT round opens at THIS round's closesAt + 1s, regardless
+            // of resolvesAt — so the player-visible hand-off stays seamless
+            // while the on-chain reveal window overlaps with the next
+            // round's commit window (different round IDs, no conflict).
             if ($continuous && $nextOpensAt !== null) {
                 $closesAt = $nextOpensAt->add(new \DateInterval(self::ROUND_DURATION));
-                $resolvesAt = $closesAt;
+                $resolvesAt = $closesAt->modify('+5 minutes');
                 $draft = new SuggestionDraft(
                     resolverCode: $draft->resolverCode,
                     resolverParams: ['date' => $nextOpensAt->format('Y-m-d')],
