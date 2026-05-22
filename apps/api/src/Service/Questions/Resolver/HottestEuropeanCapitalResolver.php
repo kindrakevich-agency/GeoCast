@@ -14,11 +14,15 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * "Where will the hottest European capital be tomorrow?"
+ * "Where will the hottest European capital be in the next 24 hours?"
  *
  * Suggest: queries Open-Meteo forecast for ~47 European capitals' daily max
  * temperature on (now + 1 calendar day in UTC). Stores the target ISO date
- * in resolverParams so resolve() asks for the same day later.
+ * in resolverParams so resolve() asks for the same day later. In
+ * continuous-rounds mode (QuestionsSuggestCommand --continuous) the
+ * command re-timestamps the draft so opens_at = previous_round.closes_at + 1s
+ * — the 24h window starts whenever the previous round ended, not at
+ * UTC midnight.
  *
  * Resolve: reads the same cities from the archive endpoint (observed, not
  * forecast). Picks the city with the highest temperature_2m_max. If two or
@@ -27,14 +31,13 @@ use Psr\Log\NullLogger;
  * down to the 0.1°C precision Open-Meteo actually publishes. If a tie still
  * survives, returns all tied cities as multi-winner points.
  *
- * Round timing (UTC):
+ * Round timing (UTC, continuous mode):
  *
- *   suggested at T          opens 00:00 of (T+1)         resolves 06:00 of (T+2)
- *   ┌────────────┬──────────────────────────────────────────┬──────────────┐
- *   │ proposal   │  betting window for "tomorrow"           │ archive read │
- *   │ written to │  (closes 23:59 UTC same day)             │ + payout     │
- *   │ DB         │                                          │              │
- *   └────────────┴──────────────────────────────────────────┴──────────────┘
+ *   opens_at = prev.closes_at + 1s     closes_at = opens_at + 24h    resolves_at = closes_at + 5m
+ *   ┌────────────────────────────────────────┬──────────────────┬─────────────────┐
+ *   │ players commit pins to the 24h window  │ reveal window    │ archive read    │
+ *   │ (chained back-to-back with prev round) │ for on-chain     │ + auto-resolve  │
+ *   └────────────────────────────────────────┴──────────────────┴─────────────────┘
  *
  * The 6h archive lag is deliberate — Open-Meteo's archive endpoint usually
  * has the previous day populated by ~02:00 UTC, but 06:00 leaves room for
