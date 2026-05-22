@@ -104,7 +104,7 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
         return new SuggestionDraft(
             resolverCode: $this->code(),
             resolverParams: ['date' => $targetDay->format('Y-m-d')],
-            question: 'Where will the hottest European capital be tomorrow?',
+            question: 'Where will the hottest European capital be in the next 24 hours?',
             opensAt: $opensAt,
             closesAt: $closesAt,
             resolvesAt: $resolvesAt,

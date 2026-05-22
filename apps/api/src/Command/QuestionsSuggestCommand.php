@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Entity\Round;
 use App\Entity\RoundSuggestion;
+use App\Enum\RoundStatus;
 use App\Enum\SuggestionStatus;
 use App\Service\Questions\ResolverRegistry;
+use App\Service\Questions\SuggestionDraft;
 use App\Service\Round\RoundService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -20,18 +23,24 @@ use Symfony\Component\Console\Output\OutputInterface;
  * suggestion. Persists the non-null ones to round_suggestions for admin
  * to pick and publish.
  *
- * Idempotent across runs in the sense that resolvers themselves choose
- * whether to propose — they can no-op when their data source has
- * nothing dramatic for the day, so re-running won't pile up duplicates
- * (each call returns at most one draft per resolver, and we cap the
- * pending queue length).
- *
  * With --auto-publish, each new draft immediately materializes into a
- * Round (status=scheduled, auto_resolver_code wired). The cron uses this
- * flag so daily rounds appear without admin clicks; manual invocations
- * default to the safer admin-gated mode.
+ * Round (status=scheduled, auto_resolver_code wired) — no admin click.
  *
- * Recommended cron: every 6 hours, --auto-publish on.
+ * With --continuous (which implies --auto-publish), the command
+ * re-timestamps each draft to chain-link with the previous round:
+ *
+ *   opens_at   = latest_round.closes_at + 1 second  (or NOW if no rounds)
+ *   closes_at  = opens_at + 24h
+ *   resolves_at= closes_at  (auto-resolve cron tolerates archive lag)
+ *
+ * Combined with --ensure-queued, the cron will maintain exactly one
+ * future round at all times: when the latest is open or resolving, a
+ * fresh #N+1 sits queued in scheduled state ready for the seamless
+ * hand-off.
+ *
+ * Recommended cron line (continuous-rounds mode):
+ *   * /5 * * * * bin/console app:questions:suggest \
+ *                  --auto-publish --continuous --ensure-queued
  */
 #[AsCommand(
     name: 'app:questions:suggest',
@@ -41,6 +50,9 @@ final class QuestionsSuggestCommand extends Command
 {
     /** Hard cap on pending suggestions — avoids the queue blowing up if admin stops picking. */
     private const MAX_PENDING = 20;
+
+    /** Round duration in continuous mode. */
+    private const ROUND_DURATION = 'PT24H';
 
     public function __construct(
         private readonly ResolverRegistry $registry,
@@ -61,23 +73,49 @@ final class QuestionsSuggestCommand extends Command
             'Immediately accept each new draft and materialize a Round (no admin click needed).',
         );
         $this->addOption(
+            'continuous',
+            null,
+            InputOption::VALUE_NONE,
+            'Re-timestamp each draft so the new round starts exactly when the previous one ends. Implies --auto-publish.',
+        );
+        $this->addOption(
+            'ensure-queued',
+            null,
+            InputOption::VALUE_NONE,
+            'Skip if a scheduled round already exists — keeps the queue at exactly one future round.',
+        );
+        $this->addOption(
             'skip-if-active',
             null,
             InputOption::VALUE_NONE,
-            'When combined with --auto-publish, skip publishing if there is already a scheduled or open round.',
+            '[deprecated] Skip if any scheduled/open/closed round exists. Use --ensure-queued for continuous mode.',
         );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $autoPublish = (bool) $input->getOption('auto-publish');
+        $continuous  = (bool) $input->getOption('continuous');
+        $ensureQueued = (bool) $input->getOption('ensure-queued');
         $skipIfActive = (bool) $input->getOption('skip-if-active');
 
-        // Defensive: when auto-publishing, optionally short-circuit if a
-        // playable round already exists. Avoids publishing #N+1 while #N
-        // is still mid-cycle.
-        if ($autoPublish && $skipIfActive && $this->hasActiveRound()) {
-            $output->writeln('<comment>An active round already exists — skipping auto-publish.</comment>');
+        // --continuous implies --auto-publish (the whole point is fully automatic round creation)
+        if ($continuous) {
+            $autoPublish = true;
+        }
+
+        // Legacy: --skip-if-active short-circuits if ANY non-resolved round exists.
+        if ($skipIfActive && $this->hasActiveRound()) {
+            $output->writeln('<comment>--skip-if-active: an active round already exists — skipping.</comment>');
+            return Command::SUCCESS;
+        }
+
+        // New: --ensure-queued only skips if a SCHEDULED round is already queued.
+        // Active (open/closed/resolving) rounds DON'T block — we want #N+1
+        // ready before #N's closes_at, so the cron can publish while #N is
+        // still open.
+        if ($ensureQueued && $this->hasScheduledRound()) {
+            $output->writeln('<comment>--ensure-queued: a scheduled round is already queued — skipping.</comment>');
             return Command::SUCCESS;
         }
 
@@ -85,6 +123,20 @@ final class QuestionsSuggestCommand extends Command
         if ($existing >= self::MAX_PENDING) {
             $output->writeln(sprintf('<comment>queue already at %d pending — skipping.</comment>', $existing));
             return Command::SUCCESS;
+        }
+
+        // Compute the next opens_at slot for continuous mode. Once a round
+        // exists this is the previous round's closes_at + 1s — seamless
+        // hand-off. Before any rounds exist, falls back to next UTC midnight.
+        $nextOpensAt = null;
+        if ($continuous) {
+            $latest = $this->latestRound();
+            if ($latest !== null) {
+                $nextOpensAt = $latest->getClosesAt()->modify('+1 second');
+            } else {
+                $nextOpensAt = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+                    ->modify('+1 day')->setTime(0, 0, 0);
+            }
         }
 
         $now = new \DateTimeImmutable();
@@ -110,6 +162,22 @@ final class QuestionsSuggestCommand extends Command
                 ++$skipped;
                 $output->writeln(sprintf('  %s: no candidate today', $resolver->code()));
                 continue;
+            }
+
+            // Continuous mode: re-timestamp the draft so the round chains
+            // directly off the previous round's closes_at.
+            if ($continuous && $nextOpensAt !== null) {
+                $closesAt = $nextOpensAt->add(new \DateInterval(self::ROUND_DURATION));
+                $resolvesAt = $closesAt;
+                $draft = new SuggestionDraft(
+                    resolverCode: $draft->resolverCode,
+                    resolverParams: ['date' => $nextOpensAt->format('Y-m-d')],
+                    question: $draft->question,
+                    opensAt: $nextOpensAt,
+                    closesAt: $closesAt,
+                    resolvesAt: $resolvesAt,
+                    preview: $draft->preview,
+                );
             }
 
             $suggestion = new RoundSuggestion(
@@ -168,9 +236,7 @@ final class QuestionsSuggestCommand extends Command
     }
 
     /**
-     * Is there already a Round that hasn't been resolved? Used by
-     * --skip-if-active to avoid stacking up future rounds while one is in
-     * flight.
+     * Any Round that isn't yet resolved. Used by the legacy --skip-if-active.
      */
     private function hasActiveRound(): bool
     {
@@ -178,10 +244,36 @@ final class QuestionsSuggestCommand extends Command
             ->select('COUNT(r.id)')
             ->where('r.status IN (:active)')
             ->setParameter('active', [
-                \App\Enum\RoundStatus::Scheduled,
-                \App\Enum\RoundStatus::Open,
-                \App\Enum\RoundStatus::Closed,
+                RoundStatus::Scheduled,
+                RoundStatus::Open,
+                RoundStatus::Closed,
             ]);
         return (int) $qb->getQuery()->getSingleScalarResult() > 0;
+    }
+
+    /**
+     * Is a Round already queued in scheduled state? Used by --ensure-queued.
+     * Open and closed rounds DON'T block — we want #N+1 ready while #N is
+     * still in flight so the hand-off is seamless.
+     */
+    private function hasScheduledRound(): bool
+    {
+        $qb = $this->rounds->createQueryBuilder('r')
+            ->select('COUNT(r.id)')
+            ->where('r.status = :s')
+            ->setParameter('s', RoundStatus::Scheduled);
+        return (int) $qb->getQuery()->getSingleScalarResult() > 0;
+    }
+
+    /**
+     * Highest-numbered Round in the system, or null if none exist.
+     */
+    private function latestRound(): ?Round
+    {
+        return $this->rounds->createQueryBuilder('r')
+            ->orderBy('r.number', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 }
