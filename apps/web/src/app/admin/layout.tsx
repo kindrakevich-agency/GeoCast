@@ -1,17 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { SuggestionsPanel } from "@/components/admin/SuggestionsPanel";
 import { useAdminRounds } from "@/hooks/useAdminRounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnchainRound } from "@/hooks/useOnchainRound";
-import { ApiError, apiFetch } from "@/lib/api/client";
-import type { ApiAdminRound, RoundStatus } from "@/lib/api/types";
+import { ApiError } from "@/lib/api/client";
+import type { RoundStatus } from "@/lib/api/types";
 import { isOnchainEnabled } from "@/lib/onchain/config";
 import { AdminProvider } from "./AdminContext";
 
@@ -77,7 +75,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Admin · Rounds
             </h1>
           </div>
-          <CreateRoundButton onCreated={refetch} />
+          {/* The cron creates every round now — no manual "+ new round" button.
+              See app:questions:suggest --continuous --ensure-queued + the
+              resolver roadmap on /admin for what's wired vs planned. */}
         </div>
 
         <div className="grid h-[calc(100vh-49px)] grid-cols-[320px_1fr]">
@@ -199,132 +199,3 @@ function OnchainBadge({ roundNumber }: { roundNumber: number }) {
   );
 }
 
-// ---------- Create-round modal ----------
-//
-// Lives in the layout so it's reachable from any /admin/* page. Portaled
-// into document.body so MapLibre's stacking context can't cover it.
-
-function CreateRoundButton({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [question, setQuestion] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [opensAt, setOpensAt] = useState(() => isoLocal(new Date(Date.now() + 5 * 60 * 1000)));
-  const [closesAt, setClosesAt] = useState(() => isoLocal(new Date(Date.now() + 24 * 60 * 60 * 1000)));
-
-  useEffect(() => setMounted(true), []);
-
-  const submit = async () => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await apiFetch("/admin/rounds", {
-        method: "POST",
-        body: {
-          question,
-          opensAt: new Date(opensAt).toISOString(),
-          closesAt: new Date(closesAt).toISOString(),
-        },
-      });
-      setOpen(false);
-      setQuestion("");
-      onCreated();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const modal = open && mounted ? createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[1000] grid place-items-center bg-black/70 backdrop-blur-md"
-      style={{ zIndex: 1000 }}
-      onClick={() => setOpen(false)}
-    >
-      <GlassPanel
-        variant="strong"
-        className="w-[min(560px,calc(100%-2rem))] space-y-4 p-6"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        <h3 className="font-[family-name:var(--font-space-grotesk)] text-lg font-semibold">
-          Create round
-        </h3>
-        <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
-            Question (≤ 280 chars)
-          </span>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            rows={2}
-            className="w-full rounded-md border border-[var(--color-border)] bg-black/30 px-3 py-2 text-sm focus:border-[var(--color-cyan)] focus:outline-none"
-            placeholder="Where will today's largest wildfire start?"
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
-              Opens at
-            </span>
-            <input
-              type="datetime-local"
-              value={opensAt}
-              onChange={(e) => setOpensAt(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-black/30 px-2 py-1.5 text-xs focus:border-[var(--color-cyan)] focus:outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
-              Closes at
-            </span>
-            <input
-              type="datetime-local"
-              value={closesAt}
-              onChange={(e) => setClosesAt(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-black/30 px-2 py-1.5 text-xs focus:border-[var(--color-cyan)] focus:outline-none"
-            />
-          </label>
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => setOpen(false)}
-            className="rounded-full border border-[var(--color-border)] px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] hover:text-white"
-          >
-            cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={!question.trim() || submitting}
-            className="rounded-full border border-[var(--color-cyan)] px-5 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)] hover:bg-[var(--color-cyan)] hover:text-[var(--color-bg)] disabled:opacity-50"
-          >
-            {submitting ? "creating…" : "create"}
-          </button>
-        </div>
-        {error && <p className="text-xs text-[var(--color-magenta)]">{error}</p>}
-      </GlassPanel>
-    </motion.div>,
-    document.body,
-  ) : null;
-
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-full border border-[var(--color-cyan)] px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)] hover:bg-[var(--color-cyan)] hover:text-[var(--color-bg)]"
-      >
-        + new round
-      </button>
-      {modal}
-    </>
-  );
-}
-
-function isoLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
