@@ -45,13 +45,17 @@ final class OnchainBroadcaster
     private const COORD_SCALE = 1_000_000;
 
     public function __construct(
-        private readonly string $privateKey,
-        private readonly string $poolAddress,
-        private readonly string $rpcUrl,
-        private readonly int $chainId,
+        private readonly ?string $privateKey,
+        private readonly ?string $poolAddress,
+        private readonly ?string $rpcUrl,
+        private readonly ?int $chainId,
         private readonly string $castBin = '/root/.foundry/bin/cast',
         private readonly LoggerInterface $logger = new NullLogger(),
     ) {
+        // Constructor params are nullable because Symfony's
+        // %env(default::VAR)% resolves to null when the env var isn't
+        // set — typical state on CI / dev. isEnabled() handles the
+        // null-equivalent-to-disabled mapping.
     }
 
     /**
@@ -60,7 +64,11 @@ final class OnchainBroadcaster
      */
     public function isEnabled(): bool
     {
-        if ($this->privateKey === '' || $this->poolAddress === '' || $this->rpcUrl === '') {
+        if (
+            $this->privateKey === null || $this->privateKey === ''
+            || $this->poolAddress === null || $this->poolAddress === ''
+            || $this->rpcUrl === null || $this->rpcUrl === ''
+        ) {
             return false;
         }
         if ($this->chainId === self::MAINNET_CHAIN_ID) {
@@ -142,6 +150,9 @@ final class OnchainBroadcaster
      */
     private function send(array $contractArgs, string $opName, array $logContext): ?string
     {
+        // isEnabled() already null-checked these — the assertion exists
+        // to convince the typechecker.
+        \assert($this->rpcUrl !== null && $this->privateKey !== null);
         $cmd = [
             $this->castBin,
             'send',
