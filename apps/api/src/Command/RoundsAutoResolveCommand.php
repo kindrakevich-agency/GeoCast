@@ -6,6 +6,8 @@ namespace App\Command;
 
 use App\Enum\RoundStatus;
 use App\Repository\RoundRepository;
+use App\Service\Onchain\OnchainBroadcaster;
+use App\Service\Onchain\SettlementBuilder;
 use App\Service\Questions\ResolverRegistry;
 use App\Service\Round\ResolveRoundService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -36,6 +38,8 @@ final class RoundsAutoResolveCommand extends Command
         private readonly RoundRepository $rounds,
         private readonly ResolverRegistry $registry,
         private readonly ResolveRoundService $resolver,
+        private readonly OnchainBroadcaster $broadcaster,
+        private readonly SettlementBuilder $settler,
     ) {
         parent::__construct();
     }
@@ -81,6 +85,40 @@ final class RoundsAutoResolveCommand extends Command
                     \count($result->points) === 1 ? '' : 's',
                     implode(', ', array_map(static fn ($p) => $p->name, $result->points)),
                 ));
+
+                // Best-effort on-chain mirror: if the round has any on-chain
+                // commits, settle them (build the Merkle root) and broadcast
+                // resolve() so claim() works for those players. Broadcaster
+                // is a no-op when the resolver key isn't configured. The
+                // settler throws if no commits exist (credit-only round) —
+                // we swallow that and move on.
+                $first = $result->points[0];
+                try {
+                    $settled = $this->settler->settle(
+                        $round->getNumber(),
+                        $first->lat,
+                        $first->lng,
+                    );
+                    $txHash = $this->broadcaster->resolve(
+                        $round->getNumber(),
+                        $first->lat,
+                        $first->lng,
+                        $settled['merkleRoot'],
+                    );
+                    if ($txHash !== null) {
+                        $output->writeln(sprintf(
+                            '<info>    ↳ on-chain resolve: %s</info>',
+                            $txHash,
+                        ));
+                    }
+                } catch (\Throwable $e) {
+                    // No on-chain commits / settler errored — credit-only
+                    // round. Off-chain resolution already succeeded above.
+                    $output->writeln(sprintf(
+                        '    ↳ no on-chain settle (%s)',
+                        $e->getMessage(),
+                    ));
+                }
             } catch (\Throwable $e) {
                 ++$deferred;
                 $output->writeln(sprintf(

@@ -61,3 +61,14 @@ services:
             $chainId: '%env(int:GEOCAST_CHAIN_ID)%'
             $contractAddress: '%env(GEOCAST_POOL_ADDRESS)%'
             $genesisBlock: '%env(int:GEOCAST_POOL_GENESIS_BLOCK)%'
+
+    # OnchainBroadcaster shells out to Foundry's `cast` to broadcast txs
+    # from a server-held resolver wallet. No-op when the private key isn't
+    # configured AND/OR we're on Base mainnet (hard guard). Only the
+    # testnet (chainId 84532) auto-signs — mainnet must use a Safe.
+    App\Service\Onchain\OnchainBroadcaster:
+        arguments:
+            $privateKey:  '%env(default::ONCHAIN_RESOLVER_PRIVATE_KEY)%'
+            $poolAddress: '%env(default::ONCHAIN_POOL_ADDRESS)%'
+            $rpcUrl:      '%env(default::ONCHAIN_RPC_URL)%'
+            $chainId:     '%env(int:default::ONCHAIN_CHAIN_ID)%'

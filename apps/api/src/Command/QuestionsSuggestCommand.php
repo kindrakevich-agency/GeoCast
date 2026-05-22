@@ -8,6 +8,7 @@ use App\Entity\Round;
 use App\Entity\RoundSuggestion;
 use App\Enum\RoundStatus;
 use App\Enum\SuggestionStatus;
+use App\Service\Onchain\OnchainBroadcaster;
 use App\Service\Questions\ResolverRegistry;
 use App\Service\Questions\SuggestionDraft;
 use App\Service\Round\RoundService;
@@ -60,6 +61,7 @@ final class QuestionsSuggestCommand extends Command
         private readonly \App\Repository\RoundRepository $rounds,
         private readonly RoundService $roundService,
         private readonly EntityManagerInterface $em,
+        private readonly OnchainBroadcaster $broadcaster,
     ) {
         parent::__construct();
     }
@@ -215,6 +217,26 @@ final class QuestionsSuggestCommand extends Command
                     '<info>    ↳ auto-published as round #%d</info>',
                     $round->getNumber(),
                 ));
+
+                // Best-effort mirror to the GeoCastPool contract. Broadcaster
+                // is a no-op when the resolver key isn't configured AND/OR
+                // we're on mainnet — so this is safe to call unconditionally.
+                // revealsAt = resolvesAt for now (reveal window collapses with
+                // resolution in the credit-only flow; if any player committed
+                // on-chain they get the full close→reveal→resolve cadence via
+                // the existing manual flow on /admin).
+                $txHash = $this->broadcaster->createRound(
+                    $round->getNumber(),
+                    $round->getOpensAt(),
+                    $round->getClosesAt(),
+                    $round->getResolvesAt() ?? $round->getClosesAt(),
+                );
+                if ($txHash !== null) {
+                    $output->writeln(sprintf(
+                        '<info>    ↳ on-chain createRound: %s</info>',
+                        $txHash,
+                    ));
+                }
             }
         }
 
