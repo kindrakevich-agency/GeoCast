@@ -34,6 +34,21 @@ final class RoundRepository extends ServiceEntityRepository
     }
 
     /**
+     * The soonest-opening scheduled round (the one queued to start next).
+     * Powers the "next round opens in Xh" countdown when no round is open.
+     */
+    public function findNextScheduled(): ?Round
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.status = :status')
+            ->setParameter('status', RoundStatus::Scheduled)
+            ->orderBy('r.opensAt', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Scheduled rounds whose opensAt has passed — ready to flip to Open.
      *
      * @return Round[]

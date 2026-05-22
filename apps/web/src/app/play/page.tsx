@@ -1,34 +1,44 @@
 import { redirect } from "next/navigation";
 import type { ApiRound } from "@/lib/api/types";
+import { UpcomingRoundView } from "./UpcomingRoundView";
 
 /**
- * Server-side redirect from the stable "Play" URL to whatever round is
- * currently live. Fetches /api/rounds/current at request time and 302s to
- * /rounds/{id}.
+ * "Play" entry point — the URL the Game nav link points at. Resolution
+ * order:
  *
- * Why this exists: the round page renders the *live* current round
- * regardless of URL slug, which makes /rounds/demo (or any URL) misleading.
- * Routing through /play guarantees the URL bar always shows the real round
- * ULID once you land on the game screen, so deep links + shares work.
+ *   1. /api/rounds/current returns an open round  → 302 to /rounds/{id}
+ *   2. /api/rounds/upcoming returns a scheduled    → render the "next
+ *      round opens in Xh Ym" countdown page (no redirect)
+ *   3. Neither                                     → 302 to /
  *
- * Fallback: if no round is live, send the user back to `/` where the
- * countdown-to-next-round UI lives.
+ * The countdown branch matters for the continuous-rounds model: between
+ * the moment round N closes and round N+1 opens (1 second), the SSR
+ * would otherwise bounce players to home. With this branch they land
+ * on a "wait for the next round" page instead.
  */
 export const dynamic = "force-dynamic";
 
-async function fetchCurrentRound(): Promise<ApiRound | null> {
+async function fetchJson<T>(path: string): Promise<T | null> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "https://geocast.games/api";
   try {
-    const res = await fetch(`${base}/rounds/current`, { cache: "no-store" });
+    const res = await fetch(`${base}${path}`, { cache: "no-store" });
     if (!res.ok) return null;
-    return (await res.json()) as ApiRound;
+    return (await res.json()) as T;
   } catch {
     return null;
   }
 }
 
 export default async function PlayPage() {
-  const round = await fetchCurrentRound();
-  if (!round) redirect("/");
-  redirect(`/rounds/${round.id}`);
+  const current = await fetchJson<ApiRound>("/rounds/current");
+  if (current) {
+    redirect(`/rounds/${current.id}`);
+  }
+
+  const upcoming = await fetchJson<ApiRound>("/rounds/upcoming");
+  if (upcoming) {
+    return <UpcomingRoundView round={upcoming} />;
+  }
+
+  redirect("/");
 }

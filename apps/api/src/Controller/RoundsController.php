@@ -44,6 +44,24 @@ final class RoundsController
     }
 
     /**
+     * GET /api/rounds/upcoming
+     *
+     * The soonest-opening scheduled round. Lets /play render a "next round
+     * opens in Xh Ym" countdown when no round is currently open, instead
+     * of redirecting players to home — important for the continuous-rounds
+     * model where there's always something queued.
+     */
+    #[Route('/rounds/upcoming', name: 'api_rounds_upcoming', methods: ['GET'])]
+    public function upcoming(): JsonResponse
+    {
+        $round = $this->rounds->findNextScheduled();
+        if ($round === null) {
+            return JsonResponse::fromJsonString('null');
+        }
+        return new JsonResponse($this->serialize($round));
+    }
+
+    /**
      * GET /api/rounds/{id}/pins
      *
      * Anonymized list of {lat, lng} for the round's heatmap. Visibility
