@@ -33,7 +33,7 @@ const isoIn = (minutes: number) =>
 export const demoRound: MockRound = {
   id: "demo",
   number: 482,
-  question: "Where will today's largest wildfire start?",
+  question: "Where will the largest wildfire start in the next 24 hours?",
   description:
     "Largest wildfire by area burned in the next 24 hours, per NASA FIRMS daily summary.",
   opensAt: isoIn(-60 * 6),

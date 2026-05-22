@@ -156,13 +156,13 @@ const STEPS = [
 ];
 
 const EXAMPLE_QUESTIONS = [
-  "Where will the hottest European capital be tomorrow?",
-  "Where will the next M5+ earthquake strike?",
-  "Where will the heaviest rainfall fall in next 24h?",
-  "Where will the largest active wildfire be today?",
-  "Where will the strongest wind gust hit a coastal capital?",
-  "Where will today's biggest geo-tagged news event happen?",
-  "Where will the aurora be visible tonight?",
+  "Where will the hottest European capital be in the next 24 hours?",
+  "Where will the next M5+ earthquake strike in the next 24 hours?",
+  "Where will the heaviest rainfall fall in the next 24 hours?",
+  "Where will the largest active wildfire be in the next 24 hours?",
+  "Where will the strongest wind gust hit a coastal capital in the next 24 hours?",
+  "Where will the biggest geo-tagged news event happen in the next 24 hours?",
+  "Where will the aurora be visible in the next 24 hours?",
 ];
 
 function HowItWorksSection() {
@@ -231,9 +231,9 @@ const SOURCES = [
     status: "live" as const,
     statusAccent: "green" as const,
     examples: [
-      "Hottest European capital tomorrow",
-      "Heaviest rainfall in 24h",
-      "Strongest wind gust",
+      "Hottest European capital in the next 24h",
+      "Heaviest rainfall in the next 24h",
+      "Strongest wind gust in the next 24h",
     ],
     blurb:
       "Forecast + observed archive across ~47 curated capitals. Two-stage tie-break: daily aggregate → hourly archive peak.",
@@ -245,11 +245,11 @@ const SOURCES = [
     status: "queued" as const,
     statusAccent: "amber" as const,
     examples: [
-      "Next M5+ earthquake in 24h",
-      "Strongest quake this week",
+      "Next M5+ earthquake in the next 24h",
+      "Strongest quake in the next 24h",
     ],
     blurb:
-      "Real-time FDSN feed of M2.5+ events worldwide. ~4 M5+ globally per day; graceful fallback to M4.5+ on quiet windows.",
+      "Real-time FDSN feed of M2.5+ events worldwide. ~4 M5+ globally per day; graceful fallback to M4.5+ on quiet 24h windows.",
     href: "https://earthquake.usgs.gov/",
   },
   {
@@ -258,9 +258,9 @@ const SOURCES = [
     status: "planned" as const,
     statusAccent: "cyan" as const,
     examples: [
-      "Largest active wildfire today",
-      "Today's biggest geo-tagged news event",
-      "Where will the aurora be visible tonight?",
+      "Largest active wildfire in the next 24h",
+      "Biggest geo-tagged news event in the next 24h",
+      "Aurora visibility in the next 24h",
     ],
     blurb:
       "Each source is a single Symfony class implementing ResolverInterface — code is open-source, drop-in extensible.",
@@ -677,7 +677,7 @@ function FinalCTASection({ onSignedIn }: { onSignedIn: () => void }) {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "What is GeoCast?",
-    a: "GeoCast is a daily geo-prediction game. Every round we publish one question — \"Where will the next M5+ earthquake strike?\", \"Where will tomorrow's hottest city be?\" — and every player drops a single pin on a world map. After the round closes, the real location is revealed and players are ranked by haversine distance. The closest pin takes the biggest share of the pool, but even far-away guesses earn a sliver: scoring is inverse-distance, not winner-takes-all.",
+    a: "GeoCast is a continuous-round geo-prediction game. Every round we publish one question — \"Where will the next M5+ earthquake strike in the next 24 hours?\", \"Where will the hottest European capital be in the next 24 hours?\" — and every player drops a single pin on a world map. Each round runs for exactly 24 hours; the next one opens the second the previous one ends. After a round closes, the real location is fetched from a public API and players are ranked by haversine distance. The closest pin takes the biggest share of the pool, but even far-away guesses earn a sliver: scoring is inverse-distance, not winner-takes-all.",
   },
   {
     q: "Is GeoCast free to play?",

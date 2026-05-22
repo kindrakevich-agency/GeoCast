@@ -91,7 +91,7 @@ export const careerPins: CareerPin[] = CAREER_COORDS.map(
 export const recentRounds: PastRound[] = [
   {
     number: 481,
-    question: "Where will the highest barometric pressure spike of the day appear?",
+    question: "Where will the highest barometric pressure spike appear in the next 24 hours?",
     date: "2026-05-18",
     answerLabel: "Reykjavík, IS",
     myPin: { lng: 10.75, lat: 59.91 },
@@ -103,7 +103,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 480,
-    question: "Where will a magnitude 4+ aftershock occur first?",
+    question: "Where will a magnitude 4+ aftershock occur in the next 24 hours?",
     date: "2026-05-17",
     answerLabel: "Catania, IT",
     myPin: { lng: 14.27, lat: 38.10 },
@@ -115,7 +115,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 478,
-    question: "Where will tomorrow's largest snowstorm hit?",
+    question: "Where will the largest snowstorm hit in the next 24 hours?",
     date: "2026-05-15",
     answerLabel: "Christchurch, NZ",
     myPin: { lng: 173.76, lat: -41.0 },
@@ -127,7 +127,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 476,
-    question: "Where will the next major volcanic tremor be detected?",
+    question: "Where will the next major volcanic tremor be detected in the next 24 hours?",
     date: "2026-05-13",
     answerLabel: "Bárðarbunga, IS",
     myPin: { lng: -18.5, lat: 65.0 },
@@ -139,7 +139,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 472,
-    question: "Where will the densest aurora photo be uploaded?",
+    question: "Where will the densest aurora be visible in the next 24 hours?",
     date: "2026-05-09",
     answerLabel: "Tromsø, NO",
     myPin: { lng: 18.95, lat: 69.65 },
@@ -151,7 +151,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 470,
-    question: "Where will the strongest solar panel output be recorded?",
+    question: "Where will the strongest solar panel output be recorded in the next 24 hours?",
     date: "2026-05-07",
     answerLabel: "Atacama, CL",
     myPin: { lng: -69.5, lat: -22.0 },
@@ -163,7 +163,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 468,
-    question: "Where will tomorrow's hottest European capital be?",
+    question: "Where will the hottest European capital be in the next 24 hours?",
     date: "2026-05-05",
     answerLabel: "Athens, GR",
     myPin: { lng: 25.1, lat: 38.5 },
@@ -175,7 +175,7 @@ export const recentRounds: PastRound[] = [
   },
   {
     number: 465,
-    question: "Where will the first M5+ earthquake of the week strike?",
+    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
     date: "2026-05-02",
     answerLabel: "Antofagasta, CL",
     myPin: { lng: -70.6, lat: -33.45 },

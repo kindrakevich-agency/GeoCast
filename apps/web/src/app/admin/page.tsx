@@ -56,24 +56,25 @@ const TEMPLATES: QuestionTemplate[] = [
     question: "Where will the heaviest rainfall fall in the next 24 hours?",
     status: "planned",
     blurb:
-      "Same ~47-capital dataset, ranked by daily precipitation_sum instead of temperature.",
+      "Same ~47-capital dataset, ranked by 24h precipitation_sum instead of temperature.",
   },
   {
     code: "openmeteo.strongest-wind-gust",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
-    question: "Where will the strongest wind gust hit a coastal capital?",
+    question: "Where will the strongest wind gust hit a coastal capital in the next 24 hours?",
     status: "planned",
     blurb:
-      "Subset to coastal capitals only (~30). Ranked by wind_gusts_10m_max.",
+      "Subset to coastal capitals only (~30). Ranked by wind_gusts_10m_max over the 24h window.",
   },
   {
     code: "openmeteo.biggest-temp-swing",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
-    question: "Which capital will have the biggest day-night temperature swing?",
+    question: "Which capital will have the biggest day-night temperature swing in the next 24 hours?",
     status: "planned",
-    blurb: "Rank by (temperature_2m_max − temperature_2m_min) for the day.",
+    blurb:
+      "Rank by (temperature_2m_max − temperature_2m_min) over the 24h window.",
   },
 
   // ---- PLANNED (other sources) ----
@@ -81,7 +82,7 @@ const TEMPLATES: QuestionTemplate[] = [
     code: "usgs.next-m5-earthquake",
     source: "USGS Earthquakes",
     sourceUrl: "https://earthquake.usgs.gov/",
-    question: "Where will the next M5+ earthquake strike?",
+    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
     status: "planned",
     blurb:
       "Real-time FDSN feed of M2.5+ events. ~4 M5+ globally per day; fall back to M4.5+ on quiet 24h windows.",
@@ -90,28 +91,28 @@ const TEMPLATES: QuestionTemplate[] = [
     code: "nasa-firms.largest-wildfire",
     source: "NASA FIRMS",
     sourceUrl: "https://firms.modaps.eosdis.nasa.gov/",
-    question: "Where will the largest active wildfire be today?",
+    question: "Where will the largest active wildfire be in the next 24 hours?",
     status: "planned",
     blurb:
-      "MODIS/VIIRS active-fire detections, ranked by FRP (Fire Radiative Power) for the day.",
+      "MODIS/VIIRS active-fire detections, ranked by 24h-cumulative FRP (Fire Radiative Power).",
   },
   {
     code: "gdelt.biggest-news-event",
     source: "GDELT Project",
     sourceUrl: "https://www.gdeltproject.org/",
-    question: "Where will today's biggest geo-tagged news event happen?",
+    question: "Where will the biggest geo-tagged news event happen in the next 24 hours?",
     status: "planned",
     blurb:
-      "Realtime geo-tagged news. Rank by event Goldstein scale + mention count.",
+      "Realtime geo-tagged news, 24h window. Rank by event Goldstein scale + mention count.",
   },
   {
     code: "noaa.aurora-visibility",
     source: "NOAA Space Weather",
     sourceUrl: "https://www.swpc.noaa.gov/",
-    question: "Where will the aurora be visible tonight?",
+    question: "Where will the aurora be visible in the next 24 hours?",
     status: "planned",
     blurb:
-      "OVATION Prime aurora forecast — pick the latitude with the highest Kp-index probability.",
+      "OVATION Prime aurora forecast over the 24h window — pick the latitude with the highest Kp-index probability.",
   },
 ];
 
