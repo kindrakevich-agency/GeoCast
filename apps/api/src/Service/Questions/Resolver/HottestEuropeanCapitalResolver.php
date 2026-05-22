@@ -10,6 +10,8 @@ use App\Service\Questions\ResolverInterface;
 use App\Service\Questions\Source\EuropeanCapitals;
 use App\Service\Questions\Source\OpenMeteoClient;
 use App\Service\Questions\SuggestionDraft;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * "Where will the hottest European capital be tomorrow?"
@@ -45,8 +47,10 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
     /** Maximum hourly peak gap (°C) we treat as a true tie. */
     private const TIE_THRESHOLD_HOURLY = 0.001;
 
-    public function __construct(private readonly OpenMeteoClient $client)
-    {
+    public function __construct(
+        private readonly OpenMeteoClient $client,
+        private readonly LoggerInterface $logger = new NullLogger(),
+    ) {
     }
 
     public function code(): string
@@ -64,9 +68,16 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
                 EuropeanCapitals::longitudes(),
                 $targetDay,
             );
-        } catch (\Throwable) {
-            // Source unavailable — let other resolvers try; cron decides
-            // whether to write zero suggestions or partial.
+        } catch (\Throwable $e) {
+            // Source unavailable — log the actual reason so the next outage
+            // doesn't show up as a mysterious "no candidate today". Returning
+            // null lets other resolvers try; cron decides whether to write
+            // zero suggestions or partial.
+            $this->logger->warning('openmeteo.hottest-european-capital suggest() failed', [
+                'targetDay' => $targetDay->format('Y-m-d'),
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+            ]);
             return null;
         }
 
