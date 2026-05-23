@@ -26,7 +26,15 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 const TRUTH = { lat: 38.7223, lng: -9.1393, name: "Lisbon (truth)" };
-const POOL_CREDITS = 100;
+
+// Real-money mode: every pin costs 1 USDC, so 100 players → 100 USDC pool.
+// The contract takes a 5% rake to treasury; the remaining 95 USDC is
+// distributed inverse-distance to winners. We use 12 representative pins
+// in this visualisation but scale the pool to 100 USDC so the numbers
+// read at the right magnitude.
+const POOL_USDC = 100;
+const RAKE_BPS = 500; // 5%
+const DISTRIBUTABLE_USDC = (POOL_USDC * (10_000 - RAKE_BPS)) / 10_000; // = 95
 
 type PlayerPin = { name: string; lat: number; lng: number };
 
@@ -67,8 +75,8 @@ type Ranked = {
   lng: number;
   distance: number;
   rawScore: number;
-  share: number;     // [0, 1]
-  payout: number;    // integer credits, floored
+  share: number;      // [0, 1] of distributable pool
+  payoutUsdc: number; // 2-decimal USDC, floored to cent
   rank: number;
 };
 
@@ -79,11 +87,13 @@ function rankPins(): Ranked[] {
   });
   const sumRaw = scored.reduce((s, r) => s + r.rawScore, 0);
   return scored
-    .map((r) => ({
-      ...r,
-      share: r.rawScore / sumRaw,
-      payout: Math.floor((POOL_CREDITS * r.rawScore) / sumRaw),
-    }))
+    .map((r) => {
+      const share = r.rawScore / sumRaw;
+      // Floor to the cent — matches the contract's per-leaf payout floor
+      // (mirrors the 6-decimal USDC, displayed to 2dp for human reading).
+      const payoutUsdc = Math.floor(DISTRIBUTABLE_USDC * share * 100) / 100;
+      return { ...r, share, payoutUsdc };
+    })
     .sort((a, b) => a.distance - b.distance)
     .map((r, i) => ({ ...r, rank: i + 1 }));
 }
@@ -194,7 +204,7 @@ export function ScoringMapVisualization() {
       <GlassPanel className="overflow-hidden p-0">
         <div className="border-b border-[var(--color-border)] bg-black/30 px-5 py-3">
           <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-            100-credit pool · {ranked.length} players
+            {POOL_USDC} USDC pool · {ranked.length} players · 5% rake → treasury
           </p>
           <p className="mt-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)]">
             truth: {TRUTH.lat.toFixed(2)}, {TRUTH.lng.toFixed(2)} — {TRUTH.name}
@@ -208,7 +218,7 @@ export function ScoringMapVisualization() {
                 <th className="px-2 py-2 text-left">player</th>
                 <th className="w-20 px-2 py-2 text-right">km off</th>
                 <th className="w-20 px-2 py-2 text-right">raw_score</th>
-                <th className="w-16 px-3 py-2 text-right">payout</th>
+                <th className="w-20 px-3 py-2 text-right">payout</th>
               </tr>
             </thead>
             <tbody>
@@ -246,7 +256,10 @@ export function ScoringMapVisualization() {
                       className="px-3 py-2 text-right font-semibold"
                       style={{ color: rowAccent }}
                     >
-                      +{r.payout}
+                      +{r.payoutUsdc.toFixed(2)}{" "}
+                      <span className="text-[8px] uppercase tracking-[0.15em] text-[var(--color-text-muted)]">
+                        USDC
+                      </span>
                     </td>
                   </tr>
                 );
@@ -255,10 +268,18 @@ export function ScoringMapVisualization() {
             <tfoot className="bg-black/20 text-[9px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
               <tr className="border-t border-[var(--color-border)]">
                 <td colSpan={4} className="px-2 py-2 text-right">
-                  Paid out
+                  Treasury rake (5%)
+                </td>
+                <td className="px-3 py-2 text-right text-[var(--color-magenta)]">
+                  {(POOL_USDC - DISTRIBUTABLE_USDC).toFixed(2)} USDC
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={4} className="px-2 py-2 text-right">
+                  Paid to players
                 </td>
                 <td className="px-3 py-2 text-right text-[var(--color-text)]">
-                  {ranked.reduce((s, r) => s + r.payout, 0)} cr
+                  {ranked.reduce((s, r) => s + r.payoutUsdc, 0).toFixed(2)} USDC
                 </td>
               </tr>
               <tr>
@@ -266,7 +287,11 @@ export function ScoringMapVisualization() {
                   Rounding → protocol bucket
                 </td>
                 <td className="px-3 py-2 text-right text-[var(--color-text-muted)]">
-                  {POOL_CREDITS - ranked.reduce((s, r) => s + r.payout, 0)} cr
+                  {(
+                    DISTRIBUTABLE_USDC -
+                    ranked.reduce((s, r) => s + r.payoutUsdc, 0)
+                  ).toFixed(2)}{" "}
+                  USDC
                 </td>
               </tr>
             </tfoot>

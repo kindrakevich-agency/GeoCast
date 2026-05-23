@@ -453,13 +453,17 @@ function ScoringSection() {
         </h2>
 
         <p className="mb-10 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
-          For a pin at haversine distance{" "}
-          <Tk>d</Tk> km from the truth, raw score ={" "}
-          <span style={{ color: "var(--color-cyan)" }}>1 / (1 + d)</span>. Your
-          payout is your share of the pool: <Tk>floor</Tk>(pool ×{" "}
+          Every pin costs <span style={{ color: "var(--color-cyan)" }}>1 USDC</span>{" "}
+          and goes into the round pool. A{" "}
+          <span style={{ color: "var(--color-magenta)" }}>5% rake</span> is
+          taken to treasury; the remaining 95% is distributed back to players
+          by inverse distance. For a pin at haversine distance <Tk>d</Tk> km
+          from the truth, raw score ={" "}
+          <span style={{ color: "var(--color-cyan)" }}>1 / (1 + d)</span> and
+          your USDC payout is <Tk>floor</Tk>(0.95 × pool ×{" "}
           <span style={{ color: "var(--color-magenta)" }}>your_raw_score</span>{" "}
           / Σ all_raw_scores). The closest pin always takes the biggest share,
-          but a pin 2,000 km off still earns a sliver — long-tail engagement,
+          but a pin 10,000 km off still earns a cent — long-tail engagement,
           no zero-sum trap.
         </p>
 
