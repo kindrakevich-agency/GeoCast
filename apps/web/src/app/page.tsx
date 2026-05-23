@@ -59,6 +59,7 @@ export default function Home() {
         <HeroSection onSignedIn={onSignedIn} />
         <HowItWorksSection />
         <ResolutionSourcesSection />
+        <AlgorithmSection />
         <ScoringSection />
         <StatsSection />
         <FinalCTASection onSignedIn={onSignedIn} />
@@ -476,41 +477,217 @@ function ScoringSection() {
   );
 }
 
-function ExampleRow({
-  rank,
-  distance,
-  share,
-  color,
+// -------------------- The algorithm --------------------
+//
+// Explicit walk-through of how a round resolves, end-to-end. Built for
+// the player who wants to understand what's actually happening — not
+// just "USGS decides" but every cron tick, every magnitude floor,
+// every formula. This is the page's most important block: the game
+// claims un-gameability, and that claim is only as believable as the
+// algorithm is transparent.
+
+function AlgorithmSection() {
+  return (
+    <section className="relative w-full px-6 py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl">
+        <SectionEyebrow>The algorithm · end to end</SectionEyebrow>
+        <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
+          Every step,{" "}
+          <span style={{ color: "var(--color-cyan)" }}>open and verifiable</span>.
+        </h2>
+        <p className="mb-10 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
+          The cron pipeline below runs on a 1-minute heartbeat. No part of
+          this is private — the resolver source code, the USGS endpoint,
+          the on-chain contract, and the Merkle tree builder are all open.
+          Anyone can replay the exact API calls that decided their round.
+        </p>
+
+        {/* Timeline */}
+        <GlassPanel className="mb-8 p-6">
+          <p className="mb-5 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+            Round lifecycle
+          </p>
+          <div className="grid gap-3 sm:grid-cols-5">
+            <TimelineStep n="T+0h"   label="Round opens"   detail="cron creates the next round + mirrors on-chain via cast send" accent="cyan" />
+            <TimelineStep n="T+0→24h" label="Pinning"      detail="players commit 1 USDC + (lat, lng) to GeoCastPool" accent="cyan" />
+            <TimelineStep n="T+24h"  label="Pins frozen"   detail="contract rejects any further commitBet() calls" accent="amber" />
+            <TimelineStep n="T+24h+" label="USGS watch"    detail="cron polls every minute for first M5+ event" accent="magenta" />
+            <TimelineStep n="event"  label="Settle + claim" detail="Merkle root posted on-chain, players claim via proof" accent="green" />
+          </div>
+        </GlassPanel>
+
+        {/* The resolver loop */}
+        <div className="mb-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+          <GlassPanel className="p-6">
+            <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+              Step 1 · The resolver loop (PHP, every 1 min)
+            </p>
+            <pre className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-black/40 p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed text-[var(--color-text)]">
+              <span style={{ color: "var(--color-text-muted)" }}>{`# AftershockResolver::resolve($params, $now)\n`}</span>
+              <span>{`$searchStart = $params['windowEnd']`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`     # the round's closesAt\n`}</span>
+              <span>{`$elapsed     = $now - $searchStart`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`        # how long we've waited\n`}</span>
+              <span>{`$minMag      = `}</span>
+              <span style={{ color: "var(--color-amber)" }}>{`magnitudeFloorFor($elapsed)\n`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`\n# call USGS — same endpoint anyone can hit\n`}</span>
+              <span style={{ color: "var(--color-cyan)" }}>{`GET earthquake.usgs.gov/fdsnws/event/1/query`}</span>
+              <span>{`\n  ?starttime=$searchStart`}</span>
+              <span>{`\n  &endtime=$now`}</span>
+              <span>{`\n  &minmagnitude=$minMag`}</span>
+              <span>{`\n  &orderby=time-asc`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`   # chronologically first\n`}</span>
+              <span>{`  &limit=1`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`\n\n# if features=[] → throw, cron retries next tick\n# else → AnswerPoint(lat, lng, place) wins the round`}</span>
+            </pre>
+          </GlassPanel>
+
+          <GlassPanel className="p-6">
+            <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+              Step 2 · Magnitude floor walks down
+            </p>
+            <p className="mb-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
+              ~22% of random 24h windows have zero M5+ events. The floor
+              drops over time so the round always resolves within 24h —
+              M4+ globally is ~50 events/day.
+            </p>
+            <ul className="space-y-1.5 font-[family-name:var(--font-jetbrains-mono)] text-xs">
+              <FloorRow waited="0–4h"   floor="M5.0+" hit="~92% hit"   accent="cyan" />
+              <FloorRow waited="4–8h"   floor="M4.5+" hit="~99% hit"   accent="amber" />
+              <FloorRow waited="8–24h"  floor="M4.0+" hit="guaranteed" accent="magenta" />
+              <FloorRow waited="24h+"   floor="M3.5+" hit="last resort" accent="green" />
+            </ul>
+          </GlassPanel>
+        </div>
+
+        {/* Distance + payout math */}
+        <div className="mb-8 grid gap-6 lg:grid-cols-2">
+          <GlassPanel className="p-6">
+            <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+              Step 3 · Distance ranking (MariaDB, ST_Distance_Sphere)
+            </p>
+            <p className="mb-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
+              For every prediction in the round, the server computes
+              haversine distance on a 6,371 km sphere between the player
+              pin and the epicentre. Indexed SPATIAL POINT column,
+              sub-second for thousands of pins.
+            </p>
+            <pre className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-black/40 p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed">
+              <span style={{ color: "var(--color-cyan)" }}>SELECT</span>
+              <span>{` id,\n  `}</span>
+              <span style={{ color: "var(--color-cyan)" }}>ST_Distance_Sphere</span>
+              <span>{`(coords, POINT(?,?)) / 1000`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{` AS km\n`}</span>
+              <span style={{ color: "var(--color-cyan)" }}>FROM</span>
+              <span>{` predictions\n`}</span>
+              <span style={{ color: "var(--color-cyan)" }}>WHERE</span>
+              <span>{` round_id = ?\n`}</span>
+              <span style={{ color: "var(--color-cyan)" }}>ORDER BY</span>
+              <span>{` km `}</span>
+              <span style={{ color: "var(--color-amber)" }}>ASC</span>
+            </pre>
+          </GlassPanel>
+
+          <GlassPanel className="p-6">
+            <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+              Step 4 · Inverse-distance payout
+            </p>
+            <p className="mb-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
+              5% rake to treasury. The remaining 95% of the pool is
+              distributed by raw_score share — the closest pin earns the
+              most, but the curve is long-tailed (a 5,000 km miss still
+              earns a sliver).
+            </p>
+            <pre className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-black/40 p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed">
+              <span style={{ color: "var(--color-amber)" }}>raw_score_i</span>
+              <span>{` = 1 / (1 + d_i)\n\n`}</span>
+              <span style={{ color: "var(--color-text-muted)" }}>{`# d_i is your distance in km\n# Σ raw_score_j across every player\n\n`}</span>
+              <span style={{ color: "var(--color-magenta)" }}>payout_i</span>
+              <span>{` = floor(\n  0.95 × pool_usdc ×\n  raw_score_i / Σ raw_score_j\n)`}</span>
+            </pre>
+          </GlassPanel>
+        </div>
+
+        {/* On-chain settle */}
+        <GlassPanel className="p-6">
+          <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+            Step 5 · Settle on-chain (Foundry · cast send)
+          </p>
+          <pre className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-black/40 p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed">
+            <span style={{ color: "var(--color-text-muted)" }}>{`# 1. Build a Merkle tree of (player, payout) leaves\n#    Leaf = bytes.concat(keccak256(abi.encode(player, amount)))\n#    Matches OZ MerkleProof.verify with sorted-pair encoding\n\n`}</span>
+            <span style={{ color: "var(--color-cyan)" }}>$merkleRoot</span>
+            <span>{` = SettlementBuilder::settle($round, $lat, $lng)\n\n`}</span>
+            <span style={{ color: "var(--color-text-muted)" }}>{`# 2. Server-held resolver wallet posts the root on-chain\n#    Round.resolve(answer_lat, answer_lng, merkleRoot)\n\n`}</span>
+            <span style={{ color: "var(--color-magenta)" }}>cast send</span>
+            <span>{` $POOL `}</span>
+            <span style={{ color: "var(--color-amber)" }}>{`"resolve(uint64,int256,int256,bytes32)"`}</span>
+            <span>{` \\\n  $round $lat_e7 $lng_e7 $merkleRoot \\\n  --private-key $RESOLVER_KEY --rpc-url $RPC\n\n`}</span>
+            <span style={{ color: "var(--color-text-muted)" }}>{`# 3. Player claims their payout via Merkle proof\n#    GeoCastPool.claim(amount, proof) → USDC transferred\n#    Idempotent: claim bit-set in storage, can't claim twice`}</span>
+          </pre>
+        </GlassPanel>
+
+        <p className="mt-6 text-center text-xs text-[var(--color-text-muted)]">
+          <a
+            href="https://github.com/kindrakevich-agency/GeoCast/tree/main/apps/api/src/Service/Questions/Resolver"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--color-cyan)] underline-offset-4 hover:underline"
+          >
+            Read AftershockResolver.php on GitHub
+          </a>
+          {" — "}300 lines, no hidden logic.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function TimelineStep({
+  n,
+  label,
+  detail,
+  accent,
 }: {
-  rank: number;
-  distance: number;
-  share: number;
-  color: "green" | "cyan" | "amber";
+  n: string;
+  label: string;
+  detail: string;
+  accent: "cyan" | "magenta" | "amber" | "green";
 }) {
   return (
-    <div className="grid grid-cols-[36px_1fr_60px_60px] items-center gap-3 rounded-md border border-[var(--color-border)] bg-black/20 px-3 py-2">
-      <span
-        className="grid h-7 w-7 place-items-center rounded-full font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold"
-        style={{
-          background: `var(--color-${color})`,
-          color: "var(--color-bg)",
-        }}
+    <div className="flex flex-col gap-1.5 rounded-md border border-[var(--color-border)] bg-black/20 p-3">
+      <p
+        className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.2em]"
+        style={{ color: `var(--color-${accent})` }}
       >
-        #{rank}
-      </span>
-      <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-muted)]">
-        {distance < 100 ? distance.toFixed(0) : Math.round(distance).toLocaleString()} km off
-      </span>
-      <span className="font-[family-name:var(--font-jetbrains-mono)] text-right text-xs text-[var(--color-text-muted)]">
-        {(1 / (1 + distance)).toFixed(4)}
-      </span>
-      <span
-        className="font-[family-name:var(--font-jetbrains-mono)] text-right text-sm font-semibold"
-        style={{ color: `var(--color-${color})` }}
-      >
-        +{share} cr
-      </span>
+        {n}
+      </p>
+      <p className="text-sm font-medium">{label}</p>
+      <p className="text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+        {detail}
+      </p>
     </div>
+  );
+}
+
+function FloorRow({
+  waited,
+  floor,
+  hit,
+  accent,
+}: {
+  waited: string;
+  floor: string;
+  hit: string;
+  accent: "cyan" | "magenta" | "amber" | "green";
+}) {
+  return (
+    <li className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-md border border-[var(--color-border)] bg-black/20 px-3 py-2">
+      <span className="text-[var(--color-text-muted)]">{waited}</span>
+      <span style={{ color: `var(--color-${accent})` }}>{floor}</span>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+        {hit}
+      </span>
+    </li>
   );
 }
 
