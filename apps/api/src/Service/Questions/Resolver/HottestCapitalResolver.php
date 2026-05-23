@@ -43,7 +43,18 @@ final class HottestCapitalResolver implements ResolverInterface
         return 'openmeteo.hottest-capital';
     }
 
+    /**
+     * Deactivated 2026-05 — the "hottest capital" question is trivially
+     * gameable via Open-Meteo's 24h forecast (~85% accuracy). GeoCast now
+     * runs a single un-gameable question via {@see AftershockResolver}.
+     * resolve() stays functional so historical rounds still settle.
+     */
     public function suggest(\DateTimeImmutable $now): ?SuggestionDraft
+    {
+        return null;
+    }
+
+    private function suggestLegacy(\DateTimeImmutable $now): ?SuggestionDraft
     {
         $targetDay = $now->setTimezone(new \DateTimeZone('UTC'))->modify('+1 day')->setTime(0, 0, 0);
 

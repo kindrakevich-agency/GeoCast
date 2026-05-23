@@ -5,7 +5,6 @@ export type CareerStats = {
   handle: string;
   joinedRound: number;
   gamesPlayed: number;
-  totalCreditsEarned: number;
   avgDistanceKm: number;
   bestDistanceKm: number;
   bestRank: number;
@@ -39,7 +38,6 @@ export const myStats: CareerStats = {
   handle: "you",
   joinedRound: 412,
   gamesPlayed: 28,
-  totalCreditsEarned: 1284,
   avgDistanceKm: 487.3,
   bestDistanceKm: 12.4,
   bestRank: 2,

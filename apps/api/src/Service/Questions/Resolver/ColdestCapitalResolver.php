@@ -36,7 +36,13 @@ final class ColdestCapitalResolver implements ResolverInterface
         return 'openmeteo.coldest-capital';
     }
 
+    /** @see HottestCapitalResolver::suggest — deactivated for the same reason. */
     public function suggest(\DateTimeImmutable $now): ?SuggestionDraft
+    {
+        return null;
+    }
+
+    private function suggestLegacy(\DateTimeImmutable $now): ?SuggestionDraft
     {
         $targetDay = $now->setTimezone(new \DateTimeZone('UTC'))->modify('+1 day')->setTime(0, 0, 0);
 

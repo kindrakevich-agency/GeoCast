@@ -14,7 +14,7 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
  *   scaled by score so the winner's line is bright cyan and the
  *   long-tail pins fade into the background.
  * - Side panel ranks every player by distance + shows their raw_score
- *   and credit payout from a 100-credit pool.
+ *   and USDC payout from a 100-USDC pool (5% rake → 95 USDC distributed).
  *
  * The pins are fixed for visual stability across page loads. Realistic
  * spread: one player nailed it (Coimbra, ~150km from the Lisbon truth),

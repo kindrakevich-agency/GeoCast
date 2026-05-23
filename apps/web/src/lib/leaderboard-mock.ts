@@ -11,7 +11,6 @@ export type LeaderboardRow = {
   gamesPlayed: number;
   /** Optional — mock has it, API doesn't (would require per-user AVG query). */
   avgDistanceKm?: number;
-  totalCredits: number;
   totalScore: number;
   isMe?: boolean;
   /** Optional — only present in mock (drives the hover ghost-pin overlay). */
@@ -99,7 +98,6 @@ function buildRows(seed: number, count: number, myRank: number): LeaderboardRow[
       country,
       gamesPlayed: Math.round(8 + rng() * 120),
       avgDistanceKm: baseDistance,
-      totalCredits: Math.round((1000 / rank) * (1 + rng() * 0.6)),
       totalScore: 200 / Math.pow(rank, 0.6) + rng() * 4,
       isMe: rank === myRank,
       recentPins,

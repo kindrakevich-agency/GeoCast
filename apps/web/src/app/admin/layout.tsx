@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { SuggestionsPanel } from "@/components/admin/SuggestionsPanel";
 import { useAdminRounds } from "@/hooks/useAdminRounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnchainRound } from "@/hooks/useOnchainRound";
@@ -83,7 +82,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="grid h-[calc(100vh-49px)] grid-cols-[320px_1fr]">
           {/* Sidebar */}
           <aside className="flex flex-col overflow-hidden border-r border-[var(--color-border)] bg-black/20">
-            <SuggestionsPanel onChange={refetch} />
             <div className="border-b border-[var(--color-border)] bg-black/40 p-3 backdrop-blur-md">
               <input
                 type="text"
@@ -112,7 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
               {isSettled && rounds.length === 0 && (
                 <p className="px-4 py-3 text-xs text-[var(--color-text-muted)]">
-                  No rounds yet. Create one above.
+                  No rounds yet. The cron auto-publishes on the next tick.
                 </p>
               )}
               {isSettled && filtered.length === 0 && rounds.length > 0 && (

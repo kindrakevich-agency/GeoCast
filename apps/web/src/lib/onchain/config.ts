@@ -1,8 +1,9 @@
 // On-chain configuration. Reads at build time from NEXT_PUBLIC_* env vars.
 //
 // When GEOCAST_POOL_ADDRESS is empty/zero, `isOnchainEnabled()` returns
-// false and the round page silently keeps the existing credit-based flow.
-// This lets v2 ship safely before the contract is deployed.
+// false and the round page renders read-only — no commit button. Every
+// production round runs on-chain; this flag exists so a fresh dev clone
+// without env vars doesn't crash on the missing contract address.
 
 import type { Address } from "viem";
 import { base, baseSepolia } from "viem/chains";

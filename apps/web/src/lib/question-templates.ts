@@ -1,15 +1,17 @@
-// Single source of truth for "what question types does GeoCast ask?".
+// Single source of truth for "what question does GeoCast ask?".
 //
 // Consumed by:
-//   /admin            — roadmap dashboard ("live" cards show recent rounds,
-//                       "planned" cards are greyed-out stubs)
-//   /                 — landing page Resolution Sources cards + typewriter
-//                       examples + the FAQ list
+//   /admin            — roadmap dashboard (the live template + research roadmap)
+//   /                 — landing page hero, sources card, FAQ
 //
-// Adding a planned template = append one row.
-// Implementing the PHP resolver = flip status to "live".
+// GeoCast runs ONE question, forever: "Where will the first M5+ earthquake
+// strike in the 24 hours after this round closes?" It is fundamentally
+// un-gameable — earthquakes are physically unpredictable, the answer
+// hasn't happened yet at commit time, and the data source publishes
+// within ~60s of detection. Every other template here is research-track
+// — listed for transparency, not active.
 
-export type TemplateStatus = "live" | "planned";
+export type TemplateStatus = "live" | "research";
 
 export type QuestionTemplate = {
   /** Stable identifier matching the PHP resolver's ResolverInterface::code(). */
@@ -26,121 +28,71 @@ export type QuestionTemplate = {
 };
 
 export const QUESTION_TEMPLATES: QuestionTemplate[] = [
-  // ---- LIVE (resolver class exists, rounds being produced) ----
+  // ---- LIVE: the only active question ----
+  {
+    code: "usgs.aftershock",
+    source: "USGS Earthquakes",
+    sourceUrl: "https://earthquake.usgs.gov/",
+    question:
+      "Where will the first M5+ earthquake strike in the 24 hours after this round closes?",
+    status: "live",
+    blurb:
+      "Genuinely un-gameable — earthquakes are physically unpredictable, the event hasn't happened at commit time. Cron polls USGS every minute; magnitude floor walks M5 → M4.5 → M4 → M3.5 across the 24h post-close window so resolution is always guaranteed.",
+  },
+
+  // ---- RESEARCH: explored, rejected as gameable, kept for transparency ----
+  {
+    code: "usgs.next-m5-earthquake",
+    source: "USGS Earthquakes",
+    sourceUrl: "https://earthquake.usgs.gov/",
+    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
+    status: "research",
+    blurb:
+      "Predecessor of aftershock — events during the open window were trivially observable via the live USGS feed at hour 23. Replaced by aftershock semantics (look at the window AFTER close).",
+  },
   {
     code: "openmeteo.hottest-capital",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
     question: "Where will the hottest world capital be in the next 24 hours?",
-    status: "live",
+    status: "research",
     blurb:
-      "Daily forecast + observed archive across 244 candidates (195 UN capitals + 49 top metros). Two-stage tie-break: daily aggregate → hourly archive peak.",
+      "Rejected — Open-Meteo's 24h forecast is ~85% accurate at the city scale. The winner is essentially announced when the round opens. Kept the resolver class for the historical 244-capital dataset.",
   },
   {
     code: "openmeteo.coldest-capital",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
     question: "Where will the coldest world capital be in the next 24 hours?",
-    status: "live",
+    status: "research",
     blurb:
-      "Mirror image of hottest. Same 244-city dataset, ranked by daily temperature_2m_min ascending — Yakutsk, Reykjavik, Ulaanbaatar are regulars.",
-  },
-  {
-    code: "usgs.next-m5-earthquake",
-    source: "USGS Earthquakes",
-    sourceUrl: "https://earthquake.usgs.gov/",
-    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
-    status: "live",
-    blurb:
-      "Real-time FDSN feed of M5+ events globally. ~4 M5+ per day worldwide; falls back to M4.5+ on quiet 24h windows (22% of random windows have zero M5+).",
+      "Same forecast-leak problem as hottest-capital — Yakutsk, Reykjavik, Ulaanbaatar are forecast-known winners. Not run live.",
   },
   {
     code: "nasa-eonet.largest-wildfire",
     source: "NASA EONET",
     sourceUrl: "https://eonet.gsfc.nasa.gov/",
     question: "Where will the largest active wildfire be in the next 24 hours?",
-    status: "live",
+    status: "research",
     blurb:
-      "Earth Observatory Natural Event Tracker — pre-clustered wildfire events worldwide. Ranked by magnitudeValue (acres), falls back to most-recent update on size-less entries.",
-  },
-
-  // ---- PLANNED (Open-Meteo, same plumbing) ----
-  {
-    code: "openmeteo.heaviest-rainfall",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the heaviest rainfall fall in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Same 244-city dataset, ranked by 24h precipitation_sum instead of temperature.",
+      "Rejected — active wildfires telegraph hours-to-days in advance via fire-detection feeds (MODIS/VIIRS). The biggest fire at hour 0 is usually still the biggest at hour 24.",
   },
   {
-    code: "openmeteo.strongest-wind-gust",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
+    code: "blitzortung.first-lightning",
+    source: "Blitzortung / WWLLN",
+    sourceUrl: "https://www.blitzortung.org/",
     question:
-      "Where will the strongest wind gust hit a coastal city in the next 24 hours?",
-    status: "planned",
+      "Where will the first lightning strike land in the 24 hours after this round closes?",
+    status: "research",
     blurb:
-      "Coastal subset (~85 cities flagged in WorldCapitals). Ranked by wind_gusts_10m_max over the 24h window.",
-  },
-  {
-    code: "openmeteo.biggest-temp-swing",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question:
-      "Which capital will have the biggest day-night temperature swing in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Rank by (temperature_2m_max − temperature_2m_min) over the 24h window. Desert capitals (Riyadh, Doha) dominate dry seasons.",
-  },
-  {
-    code: "openmeteo.highest-uv-index",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the highest UV index reading land in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Rank by uv_index_max — equatorial + high-altitude cities (Quito, La Paz) lead consistently.",
-  },
-  {
-    code: "openmeteo.clearest-stargazing",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question:
-      "Which dark-sky site will have the clearest skies in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "30-site curated dark-sky list (Atacama, La Palma, Mauna Kea, …). Rank by cloud_cover_mean ascending.",
-  },
-
-  // ---- PLANNED (other sources) ----
-  {
-    code: "noaa.next-tropical-storm",
-    source: "NOAA NHC",
-    sourceUrl: "https://www.nhc.noaa.gov/",
-    question:
-      "Where will the next named-storm landfall happen in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "National Hurricane Center cone forecasts. Restricted to active basins (Atlantic / E-Pacific / W-Pacific via JMA + JTWC mirrors).",
-  },
-  {
-    code: "gdelt.biggest-news-event",
-    source: "GDELT Project",
-    sourceUrl: "https://www.gdeltproject.org/",
-    question:
-      "Where will the biggest geo-tagged news event happen in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Realtime geo-tagged news, 24h window. Rank by event Goldstein scale + mention count.",
+      "Promising — sub-second publish, 50-100 strikes/sec globally. Storm regions are forecast-known but exact strike location is chaotic. Future flagship alongside aftershock.",
   },
 ];
 
-/** Just the live ones — used by the typewriter on the landing page. */
+/** Just the live template's question — used by the typewriter on the landing page. */
 export const LIVE_QUESTIONS: string[] = QUESTION_TEMPLATES.filter(
   (t) => t.status === "live",
 ).map((t) => t.question);
 
-/** Live + planned — used when "every question we ask" is the right framing. */
+/** All known templates (live + research). */
 export const ALL_QUESTIONS: string[] = QUESTION_TEMPLATES.map((t) => t.question);

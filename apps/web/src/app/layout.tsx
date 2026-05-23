@@ -24,11 +24,11 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://geocast.games"),
   title: {
-    default: "GeoCast — Drop a pin. Predict the world.",
+    default: "GeoCast — Predict where Earth will quake next.",
     template: "%s · GeoCast",
   },
   description:
-    "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+    "Un-gameable geo-prediction game. Pin where the first M5+ earthquake will strike after the round closes. Closest to the epicentre wins.",
   applicationName: "GeoCast",
   keywords: [
     "geo prediction",
@@ -43,15 +43,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "GeoCast",
-    title: "GeoCast — Drop a pin. Predict the world.",
-    description: "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+    title: "GeoCast — Predict where Earth will quake next.",
+    description: "Un-gameable geo-prediction game. Pin where the first M5+ earthquake will strike after the round closes. Closest to the epicentre wins.",
     url: "https://geocast.games",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "GeoCast — Drop a pin. Predict the world.",
-    description: "Daily geo-prediction game. One question, one pin, one world. Closest wins.",
+    title: "GeoCast — Predict where Earth will quake next.",
+    description: "Un-gameable geo-prediction game. Pin where the first M5+ earthquake will strike after the round closes. Closest to the epicentre wins.",
   },
   robots: {
     index: true,

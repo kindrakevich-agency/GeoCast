@@ -15,7 +15,12 @@ export type ApiRound = {
   closesAt: string;       // ISO 8601
   resolvesAt?: string | null;
   resolvedAt?: string | null;
-  poolCredits: number;
+  /**
+   * Legacy field — still present in the JSON for historical rounds but no
+   * longer consumed by the frontend. The on-chain pool (queried via
+   * useOnchainRound) is the canonical pool size in USDC.
+   */
+  poolCredits?: number;
   totalParticipants: number;
   status: RoundStatus;
   answer: LngLat | null;
@@ -33,7 +38,8 @@ export type ApiRound = {
 export type ApiUser = {
   id: string;
   walletAddress: string;
-  creditsBalance: number;
+  /** Legacy — server still emits it for backwards compatibility, frontend ignores. */
+  creditsBalance?: number;
   gamesPlayed: number;
   totalScore: number;
   isAdmin: boolean;
@@ -56,7 +62,8 @@ export type ApiPrediction = {
   roundId: string;
   lat: number;
   lng: number;
-  creditsStaked: number;
+  /** Legacy — server still emits it; the on-chain commit stakes 1 USDC. */
+  creditsStaked?: number;
   placedAt: string;
   /** Null until the round is resolved. */
   distanceKm?: number | null;
@@ -64,19 +71,13 @@ export type ApiPrediction = {
   payout?: number;
 };
 
-export type ApiPlacePredictionResponse = {
-  prediction: ApiPrediction;
-  balance: number;
-  pool: number;
-  participants: number;
-};
-
 export type ApiLeaderboardRow = {
   rank: number;
   userId: string;
   wallet: string;
   gamesPlayed: number;
-  totalCredits: number;
+  /** Legacy — server still emits it for backwards compatibility, frontend ignores. */
+  totalCredits?: number;
   totalScore: number;
   isMe: boolean;
 };
@@ -85,7 +86,8 @@ export type ApiLeaderboardMe = {
   userId: string;
   wallet: string;
   gamesPlayed: number;
-  totalCredits: number;
+  /** Legacy — see ApiLeaderboardRow.totalCredits. */
+  totalCredits?: number;
   totalScore: number;
   rank?: number;       // present when caller is outside top 100
 };
@@ -136,7 +138,8 @@ export type ApiPredictionHistoryItem = {
   distanceKm: number | null;
   rank: number | null;
   payout: number;
-  creditsStaked: number;
+  /** Legacy — see ApiPrediction.creditsStaked. */
+  creditsStaked?: number;
   round: {
     id: string;
     number: number;
@@ -146,7 +149,8 @@ export type ApiPredictionHistoryItem = {
     resolvedAt: string | null;
     answer: LngLat | null;
     totalParticipants: number;
-    poolCredits: number;
+    /** Legacy — see ApiRound.poolCredits. */
+    poolCredits?: number;
   };
 };
 

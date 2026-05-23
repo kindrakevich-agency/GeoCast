@@ -9,8 +9,6 @@ import { useAuth } from "@/hooks/useAuth";
 export type TopBarProps = {
   /** Used as a fallback when no JWT'd user is present. */
   wallet: string;
-  /** Fallback balance. Real balance comes from useAuth().user. */
-  balance: number;
 };
 
 type NavItem = {
@@ -30,7 +28,7 @@ const NAV: NavItem[] = [
   { href: "/admin", label: "Admin", match: (p) => p.startsWith("/admin"), adminOnly: true },
 ];
 
-export function TopBar({ wallet, balance }: TopBarProps) {
+export function TopBar({ wallet }: TopBarProps) {
   const pathname = usePathname() ?? "/";
   const { user, isAuthed } = useAuth();
 
@@ -71,30 +69,11 @@ export function TopBar({ wallet, balance }: TopBarProps) {
       </nav>
 
       <div className="flex items-center gap-3">
-        {isAuthed && user ? (
-          <>
-            <div className="hidden items-center gap-2 rounded-full border border-[var(--color-border)] px-3 py-1 font-[family-name:var(--font-jetbrains-mono)] text-xs sm:flex">
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ background: "var(--color-cyan)", boxShadow: "0 0 8px var(--color-cyan)" }}
-              />
-              {user.creditsBalance} cr
-            </div>
-            <ConnectWalletButton variant="compact" />
-          </>
-        ) : (
-          // Unauthenticated — show the demo balance/wallet placeholder + a
-          // compact Connect button so the user can sign in from any screen.
-          <>
-            <div className="hidden items-center gap-2 rounded-full border border-[var(--color-border)] px-3 py-1 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-muted)] sm:flex">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]" />
-              {balance} cr · demo
-            </div>
-            <ConnectWalletButton variant="compact" />
-            <span className="hidden font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)] lg:inline">
-              {wallet}
-            </span>
-          </>
+        <ConnectWalletButton variant="compact" />
+        {!isAuthed && (
+          <span className="hidden font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-muted)] lg:inline">
+            {wallet}
+          </span>
         )}
       </div>
     </GlassPanel>

@@ -38,7 +38,6 @@ function apiToDisplay(r: ApiLeaderboardRow, myWallet: string | null): Leaderboar
     wallet: r.wallet,
     handle: shortWallet(r.wallet),
     gamesPlayed: r.gamesPlayed,
-    totalCredits: r.totalCredits,
     totalScore: r.totalScore,
     isMe,
   };
@@ -130,7 +129,7 @@ export default function LeaderboardPage() {
               <span>#</span>
               <span>explorer</span>
               <span className="text-right">avg km</span>
-              <span className="text-right">credits</span>
+              <span className="text-right">score</span>
             </div>
           </div>
 
@@ -251,7 +250,7 @@ function LeaderboardRowItem({
         className="text-right font-[family-name:var(--font-jetbrains-mono)] text-xs tabular-nums"
         style={{ color: top3 ? "var(--color-green)" : "var(--color-text)" }}
       >
-        +{row.totalCredits.toLocaleString()}
+        {row.totalScore.toFixed(2)}
       </span>
     </li>
   );

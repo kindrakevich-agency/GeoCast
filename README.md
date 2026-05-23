@@ -139,8 +139,7 @@ POST  /api/auth/verify            secp256k1 recovery → JWT (30d TTL)
 GET   /api/rounds/current         live round or null
 GET   /api/rounds/{id}/my-prediction   own pin (cross-reload hydration)
 GET   /api/rounds/{id}/pins       anonymised heatmap pins (post-commit)
-POST  /api/rounds/{id}/predictions     place pin, deduct credit, broadcast
-GET   /api/rounds/{id}/claim-proof     v2 Merkle proof + leaf amount
+GET   /api/rounds/{id}/claim-proof     Merkle proof + leaf amount
 
 GET   /api/me                     profile + stats
 GET   /api/me/predictions         paginated history
@@ -149,13 +148,8 @@ GET   /api/me/career-pins         career heatmap coordinates
 GET   /api/leaderboard?period=today|week|all   top 100 from Redis ZSET
 GET   /api/stats                  landing-page metrics
 
-POST  /api/admin/rounds                       create scheduled round
-POST  /api/admin/rounds/{id}/open
-POST  /api/admin/rounds/{id}/resolve          manual fallback: rank + payout + broadcast
-POST  /api/admin/rounds/{id}/settle           v2 — build Merkle tree + persist proofs
-GET   /api/admin/suggestions                  pending auto-generated question candidates
-POST  /api/admin/suggestions/{id}/accept      materialise a Round wired to its resolver
-POST  /api/admin/suggestions/{id}/reject      dismiss a pending suggestion
+POST  /api/admin/rounds/{id}/settle           build Merkle tree + persist proofs
+                                              (called by the auto-resolver cron)
 
 POST  /api/pusher/auth            presence-channel auth callback
 GET   /api/health                 liveness probe
@@ -165,29 +159,29 @@ GET   /api/health                 liveness probe
 
 ## Auto-resolver framework
 
-Rounds don't need a human to pick the answer. Every question template
+Rounds don't need a human anywhere in the loop. Every question template
 ships paired with a resolver — a small PHP class that knows two things:
 how to *propose* a candidate question, and how to *resolve* it from a
-public API when its time comes. The admin sees pending suggestions in
-the sidebar, picks one, and the rest happens on the cron.
+public API when its time comes. The cron drives the whole pipeline.
 
 ```
 ┌──────────────────┐      ┌────────────────────┐      ┌─────────────────┐
-│ app:questions:   │      │ /admin/suggestions │      │ app:rounds:     │
-│ suggest          │─────►│ — admin picks one  │─────►│ auto-resolve    │
-│  (every 6h)      │      │   (or dismisses)   │      │  (every 5 min)  │
-└──────────────────┘      └────────────────────┘      └────────┬────────┘
-        │                                                       │
-        ▼                                                       ▼
-ResolverInterface.suggest()                       ResolverInterface.resolve()
-   - reads forecast/state                            - reads observed/actual
-   - returns SuggestionDraft                         - returns ResolutionResult
-     (question + window + params)                      (points[] + audit log)
-        │                                                       │
-        ▼                                                       ▼
-   round_suggestions table                          ResolveRoundService.resolveMulti()
-     status=pending                                   ▶ rank, payout, leaderboards
-                                                      ▶ Pusher broadcast
+│ app:questions:   │      │  auto-publish:     │      │ app:rounds:     │
+│ suggest          │─────►│  Round row +       │─────►│ auto-resolve    │
+│  --continuous    │      │  on-chain mirror   │      │  (every 5 min)  │
+│  --ensure-queued │      │  via cast send     │      └────────┬────────┘
+│  (every 5 min)   │      └────────────────────┘               │
+└──────────────────┘                                            ▼
+        │                                          ResolverInterface.resolve()
+        ▼                                              - reads observed/actual
+ResolverInterface.suggest()                            - returns ResolutionResult
+   - reads forecast/state                                (points[] + audit log)
+   - returns SuggestionDraft                                   │
+     (question + window + params)                              ▼
+                                                  ResolveRoundService.resolveMulti()
+                                                    ▶ rank, payout, leaderboards
+                                                    ▶ on-chain settle (Merkle root)
+                                                    ▶ Pusher broadcast
 ```
 
 ### What's wired
@@ -230,31 +224,35 @@ PHPUnit coverage in `tests/Service/Questions/`:
 
 ---
 
-## The on-chain story (v2)
+## On-chain settlement
 
-The credit-based flow is the default. The on-chain path exists alongside
-it as a portfolio demonstration: same UX, same scoring, but settled in
-test USDC on Base Sepolia (Base L2 in production-shape).
+Every round settles in test USDC on Base Sepolia. There is no credit
+fallback — pin placement requires a wallet signature + 1 USDC commit
+into `GeoCastPool`. (Test USDC is mintable on demand from a button on
+the round page.)
 
 - `contracts/src/GeoCastPool.sol` — single contract, ~300 LOC.
 - **Commit-reveal** anti-cheat: the player commits
   `keccak256(player, lat, lng, salt)`, salt stashed in localStorage,
   reveal opens after the round closes.
-- **5% rake** to a treasury Safe; rest goes into the round pool.
+- **5% rake** to a treasury Safe; the remaining 95% is distributed to
+  players by inverse-distance weighting.
 - **Merkle-drop settlement** — off-chain `MerkleBuilder` computes the
-  tree from revealed pins, the admin posts the root via `resolve()`,
-  players pull their share via `claim(amount, proof)` against
+  tree from revealed pins; the server-side resolver wallet posts the
+  root via `GeoCastPool.resolve()`; players pull their share via
+  `claim(amount, proof)` against
   `bytes.concat(keccak256(abi.encode(player, amount)))` (matches OZ
   `MerkleProof.verify` with sorted-pair encoding).
-- **Off-chain mirror** — `OnchainSync` polls Base via `eth_getLogs` in
+- **Server-side mirror** — `OnchainBroadcaster` shells out to `cast send`
+  on every new round (createRound → tx) and every resolved round
+  (resolve → tx). `OnchainSync` polls Base via `eth_getLogs` in
   1,000-block windows with 2-block confirmations, persists to an
   `onchain_events` log with `UNIQUE(chain_id, block_number, log_index)`
-  for idempotency. Runs as a Symfony console command via cron.
+  for idempotency. Both run as Symfony console commands via cron.
 
-The admin "create round on-chain" + "settle on-chain" actions are wired
-into `/admin/round/{id}` with wagmi hooks (`useCreateRound`,
-`useResolveOnchain`). Errors from viem are humanised through a small
-matrix in `apps/web/src/lib/onchain/errors.ts` before they reach the UI.
+The admin pane has no manual lifecycle controls — `/admin/round/{id}`
+is read-only. Round creation, on-chain mirror, lifecycle transitions,
+and on-chain settle all happen via the cron pipeline.
 
 Why testnet only: this is a portfolio piece, not a regulated product. The
 architecture is real; the dollars are pretend.
@@ -267,7 +265,7 @@ For a prediction at haversine distance `d` (km) from the answer:
 
 ```
 raw_score = 1 / (1 + d)
-payout    = floor(pool_credits × raw_score / Σ raw_scores)
+payout    = floor(0.95 × pool_usdc × raw_score / Σ raw_scores)
 ```
 
 That curve gives the closest pin the biggest share without making it

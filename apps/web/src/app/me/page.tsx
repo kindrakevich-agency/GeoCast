@@ -112,7 +112,6 @@ export default function ProfilePage() {
 
   const wallet = user?.walletAddress ?? myStats.wallet;
   const gamesPlayed = user?.gamesPlayed ?? myStats.gamesPlayed;
-  const creditsBalance = user?.creditsBalance ?? myStats.totalCreditsEarned;
   const totalScore = user?.totalScore ?? myStats.totalScore;
 
   // Derived stats: from real history when authed-with-data, mock otherwise.
@@ -222,10 +221,14 @@ export default function ProfilePage() {
             }
           />
           <StatCard
-            label={isAuthed ? "Credits" : "Credits earned"}
-            value={creditsBalance.toLocaleString()}
+            label="Top-10 rate"
+            value={`${(winRate * 100).toFixed(0)}%`}
             accent="cyan"
-            hint={isAuthed ? "live balance" : `top-10 rate ${(winRate * 100).toFixed(0)}%`}
+            hint={
+              isAuthed && resolvedHistory.length === 0
+                ? "no resolved rounds yet"
+                : `over ${recentRounds.length} round${recentRounds.length === 1 ? "" : "s"}`
+            }
           />
         </motion.div>
 

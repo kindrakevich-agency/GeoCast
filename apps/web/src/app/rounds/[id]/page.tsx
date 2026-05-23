@@ -22,8 +22,8 @@ import { usePresenceCursors } from "@/hooks/usePresenceCursors";
 import { usePusherChannel } from "@/hooks/usePusherChannel";
 import { useRoundPins } from "@/hooks/useRoundPins";
 import { useUsdcBalance } from "@/hooks/useUsdcBalance";
-import { ApiError, apiFetch, getValidToken } from "@/lib/api/client";
-import type { ApiPlacePredictionResponse, ApiPrediction } from "@/lib/api/types";
+import { apiFetch, getValidToken } from "@/lib/api/client";
+import type { ApiPrediction } from "@/lib/api/types";
 import { demoPresence, demoRound, shortWallet, type LngLat, type MockPresence } from "@/lib/mock";
 import { isOnchainEnabled, getOnchainConfig } from "@/lib/onchain/config";
 import { baseSepolia } from "viem/chains";
@@ -33,14 +33,14 @@ import { baseSepolia } from "viem/chains";
  *
  * Reads the round from /api/rounds/current (falls back to demoRound mock).
  *
- * Pin placement:
- *   - Authenticated + round is from API → POST /api/rounds/{id}/predictions,
- *     update local + auth-context state from the response.
- *   - Otherwise → local-only mock placement so the demo loop still works.
+ * Pin placement: every round is auto-mirrored on-chain by the server-side
+ * OnchainBroadcaster, so the commit flow is always wagmi → GeoCastPool.
+ * Anonymous / demo visits get a local-only placement so the landing-style
+ * preview still works without auth.
  */
 export default function ActiveRoundPage() {
   const { round: liveRound, isLoading } = useCurrentRound();
-  const { isAuthed, updateUser } = useAuth();
+  const { isAuthed } = useAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
 
@@ -66,9 +66,7 @@ export default function ActiveRoundPage() {
   // hook into an orphan chunk that the SSR'd HTML never script-tagged,
   // so the hook never ran. Inlining keeps it in the page's own chunk.
   const [predictionLoading, setPredictionLoading] = useState(false);
-  const [predictionFetchBump, setPredictionFetchBump] = useState(0);
   const [persistedPrediction, setPersistedPrediction] = useState<ApiPrediction | null>(null);
-  const refetchMyPrediction = () => setPredictionFetchBump((n) => n + 1);
 
   useEffect(() => {
     const roundId = liveRound?.id;
@@ -105,7 +103,7 @@ export default function ActiveRoundPage() {
       cancelled = true;
       ctrl.abort();
     };
-  }, [liveRound?.id, predictionFetchBump]);
+  }, [liveRound?.id]);
 
   // Local pool/participants override populated from /predictions response.
   // (Live round state could lag — we got the authoritative numbers back from
@@ -154,7 +152,6 @@ export default function ActiveRoundPage() {
     pinFetchKey,
   );
 
-  const displayPool = livePool ?? (round.poolCredits || demoRound.poolCredits);
   const predictionCount =
     liveParticipants ?? (round.totalParticipants || demoRound.totalParticipants);
   // The "explorers playing now" badge shows live watcher count from Pusher
@@ -222,27 +219,13 @@ export default function ActiveRoundPage() {
     ];
   }, [resolved, myPin, myRank, myDistance, myPayout]);
 
-  const onMapClick = (coords: LngLat) => {
-    if (placed || submitting) return;
-    // Block clicks while we're still hydrating the user's prior placement —
-    // otherwise a fast click between page-load and the /my-prediction
-    // response races straight into a guaranteed-409 POST.
-    if (isAuthed && usingLive && predictionLoading) return;
-    setSubmitError(null);
-    setPending(coords);
-  };
-
-  // The full POST happy path is gated by: authenticated + live round.
-  // Anonymous users / demo round → local-only mock placement.
-  const shouldHitApi = isAuthed && usingLive;
-
-  // ---------- On-chain commit (v2) ----------
+  // ---------- On-chain commit (only path) ----------
   //
-  // When isOnchainEnabled() AND the round has been mirrored to GeoCastPool
-  // via admin createRound(), the click-to-place flow swaps from POST
-  // /predictions → wagmi commitBet. Falls back transparently to the credit
-  // POST when any precondition isn't met, so this code is safe to ship
-  // before all rounds are mirrored.
+  // Every round is auto-mirrored on-chain by the server resolver wallet on
+  // creation (see OnchainBroadcaster). The click-to-place flow always goes
+  // through wagmi commitBet — there is no credit fallback. If the round
+  // isn't mirrored yet, isn't open yet, or has closed, the map blocks the
+  // click and a banner explains the state.
   const onchainCfg = getOnchainConfig();
   const onchain = useOnchainRound(usingLive ? round.number : null);
   const { balance: usdcBalance, refetch: refetchUsdc } = useUsdcBalance();
@@ -262,14 +245,35 @@ export default function ActiveRoundPage() {
   const onchainNotYetOpen = onchain.exists && nowSec < onchain.opensAt;
   const onchainAlreadyClosed = onchain.exists && nowSec >= onchain.closesAt;
 
-  // Use the on-chain path only when the round is mirrored AND we're inside
-  // the contract's commit window. Outside it (not-yet-open or already-closed),
-  // fall back to the off-chain credit POST so players aren't stuck staring at
-  // a red MetaMask alert with no actionable path forward.
-  const shouldUseOnchain =
+  const canCommit =
     isOnchainEnabled() && isAuthed && usingLive && onchainCommitOpen;
-  const usdcShortfall = shouldUseOnchain && usdcBalance < onchainCfg.betMicros;
+  const usdcShortfall = canCommit && usdcBalance < onchainCfg.betMicros;
   const isTestnet = onchainCfg.chainId === baseSepolia.id;
+
+  // Pool size: on-chain micros when mirrored, otherwise live override
+  // (set by Pusher pin-placed broadcasts), otherwise demo fallback. We
+  // display this as a USDC figure — every commit deposits 1 USDC.
+  const displayPool = onchain.exists
+    ? Number(onchain.poolMicros) / 1_000_000
+    : livePool ?? (usingLive ? predictionCount : demoRound.poolCredits);
+
+  const onMapClick = (coords: LngLat) => {
+    if (placed || submitting) return;
+    // Block clicks while we're still hydrating the user's prior placement.
+    if (isAuthed && usingLive && predictionLoading) return;
+    // Demo (anonymous / no live round) → local-only placement so the
+    // landing-style preview still works without auth.
+    if (!isAuthed || !usingLive) {
+      setSubmitError(null);
+      setPending(coords);
+      return;
+    }
+    // Authed + live: refuse the click outside the on-chain commit window
+    // and surface a clear message instead of opening the confirm modal.
+    if (!canCommit) return;
+    setSubmitError(null);
+    setPending(coords);
+  };
 
   // Reflect the wagmi commit phase back into the page's submit-status UI.
   useEffect(() => {
@@ -288,7 +292,8 @@ export default function ActiveRoundPage() {
     if (!pending) return;
     const coords = pending;
 
-    if (!shouldHitApi) {
+    // Demo / anonymous mode → local-only placement.
+    if (!isAuthed || !usingLive) {
       setMyPin(coords);
       setPending(null);
       return;
@@ -297,49 +302,17 @@ export default function ActiveRoundPage() {
     setSubmitting(true);
     setSubmitError(null);
 
-    if (shouldUseOnchain) {
-      // Branch A — on-chain. Pin is shown optimistically; if the tx
-      // ultimately reverts the useEffect on commitStatus.error surfaces
-      // the wallet's error message and we keep the pin (user can
-      // discard or retry — UX TBD).
-      setMyPin(coords);
-      try {
-        await onchainCommit(coords);
-        // Optimistically bump the pool count — backend cron will reconcile
-        // on the next onchain:sync tick.
-        setLiveParticipants((n) => (n ?? 0) + 1);
-      } catch {
-        // Errors surface via commitStatus.error → useEffect → submitError.
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    // Branch B — existing credit flow.
+    // On-chain commit. Pin is shown optimistically; if the tx reverts the
+    // useEffect on commitStatus.error surfaces the wallet's error message
+    // and the user can retry.
+    setMyPin(coords);
     try {
-      const result = await apiFetch<ApiPlacePredictionResponse>(
-        `/rounds/${round.id}/predictions`,
-        { method: "POST", body: { lat: coords.lat, lng: coords.lng } },
-      );
-
-      setMyPin({ lat: result.prediction.lat, lng: result.prediction.lng });
-      setLivePool(result.pool);
-      setLiveParticipants(result.participants);
-      updateUser({ creditsBalance: result.balance });
-      setPending(null);
-    } catch (e) {
-      const msg =
-        e instanceof ApiError
-          ? humanizeApiError(e)
-          : (e as Error).message || "Failed to place pin.";
-      setSubmitError(msg);
-      // 409 means the server has a prediction for this user/round already.
-      // Refetch /my-prediction so the page picks it up and the pin renders.
-      if (e instanceof ApiError && e.status === 409) {
-        refetchMyPrediction();
-        setPending(null);
-      }
+      await onchainCommit(coords);
+      // Optimistically bump the pool count — backend cron reconciles on
+      // the next onchain:sync tick.
+      setLiveParticipants((n) => (n ?? 0) + 1);
+    } catch {
+      // Errors surface via commitStatus.error → useEffect → submitError.
     } finally {
       setSubmitting(false);
     }
@@ -360,7 +333,7 @@ export default function ActiveRoundPage() {
         }}
       />
 
-      <TopBar wallet="0x7f4c…a3b1" balance={100} />
+      <TopBar wallet="0x7f4c…a3b1" />
 
       <QuestionCard
         question={round.question}
@@ -381,13 +354,7 @@ export default function ActiveRoundPage() {
         />
       )}
 
-      {!resolved && (
-        <BottomHint
-          placed={placed}
-          coords={myPin}
-          costLabel={shouldUseOnchain ? "1 USDC" : "1 credit"}
-        />
-      )}
+      {!resolved && <BottomHint placed={placed} coords={myPin} />}
 
       <ConfirmModal
         open={pending !== null}
@@ -397,8 +364,6 @@ export default function ActiveRoundPage() {
           setPending(null);
           setSubmitError(null);
         }}
-        costLabel={shouldUseOnchain ? "1 USDC" : "1 credit"}
-        onchain={shouldUseOnchain}
       />
 
       {/* Submit error toast — sits above the BottomHint */}
@@ -450,7 +415,7 @@ export default function ActiveRoundPage() {
         {isLoading
           ? "loading…"
           : usingLive
-          ? `round #${round.number} · ${shouldUseOnchain ? "on-chain · $1 USDC" : shouldHitApi ? "signed in · 1 credit" : "demo mode (sign in to play)"}`
+          ? `round #${round.number} · ${canCommit ? "on-chain · $1 USDC" : isAuthed ? "on-chain window not open" : "demo mode (sign in to play)"}`
           : "mock data"}
       </div>
 
@@ -471,44 +436,27 @@ export default function ActiveRoundPage() {
         </button>
       )}
 
-      {/* "Round not yet on-chain" warning — when the global config has a pool
-          address but THIS round hasn't been mirrored via createRound yet. */}
+      {/* "Round being mirrored" — the round was created in the DB but the
+          server's on-chain createRound() tx hasn't landed yet. Resolves
+          within ~30s on the next cron tick. */}
       {isOnchainEnabled() && isAuthed && usingLive && !onchain.exists && !onchain.isLoading && !placed && (
         <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-border)] bg-black/60 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] backdrop-blur-md">
-          round #{round.number} not yet mirrored on-chain · falling back to credits
+          round #{round.number} · mirroring on-chain… try again in a moment
         </div>
       )}
 
-      {/* On-chain mirrored but the commit window is closed (not yet open OR
-          already past). Players can still play via credits in the meantime,
-          but they deserve to know why MetaMask refuses to simulate. */}
+      {/* On-chain mirrored but the commit window isn't open yet / has closed. */}
       {isOnchainEnabled() && isAuthed && usingLive && !placed && onchainNotYetOpen && (
         <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-amber)]/40 bg-black/70 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-amber)] backdrop-blur-md">
-          on-chain window opens {new Date(onchain.opensAt * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })} · placing via credits for now
+          on-chain window opens {new Date(onchain.opensAt * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
         </div>
       )}
       {isOnchainEnabled() && isAuthed && usingLive && !placed && onchainAlreadyClosed && onchain.resolvedAt === 0 && (
         <div className="pointer-events-none fixed bottom-12 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[var(--color-magenta)]/40 bg-black/70 px-4 py-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-magenta)] backdrop-blur-md">
-          on-chain commit window closed · only credit placements accepted
+          commit window closed · awaiting resolution
         </div>
       )}
 
     </main>
   );
-}
-
-function humanizeApiError(e: ApiError): string {
-  // The API serializes errors as either { detail } (Symfony) or { error }
-  // (custom). Pull whichever's there; fall back to status text.
-  const body = e.body;
-  if (body && typeof body === "object") {
-    const b = body as Record<string, unknown>;
-    if (typeof b.detail === "string") return b.detail;
-    if (typeof b.error === "string") return b.error;
-    if (typeof b.message === "string") return b.message;
-  }
-  if (e.status === 401) return "Please sign in to place a pin.";
-  if (e.status === 409) return "Round closed or you've already placed a pin here.";
-  if (e.status === 400) return "Coordinates rejected by the server.";
-  return e.message || "Failed to place pin.";
 }

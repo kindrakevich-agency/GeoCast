@@ -31,7 +31,7 @@ import {
 
 // TEMPLATES + types live in @/lib/question-templates so the landing page,
 // admin dashboard, and (future) any API endpoint can share one source of
-// truth. To add a new planned template: append to QUESTION_TEMPLATES there.
+// truth. To add a new research-track template: append to QUESTION_TEMPLATES there.
 
 export default function AdminRoadmapPage() {
   const { rounds, isSettled } = useAdminContext();
@@ -51,7 +51,7 @@ export default function AdminRoadmapPage() {
   }, [rounds]);
 
   const live = QUESTION_TEMPLATES.filter((t) => t.status === "live");
-  const planned = QUESTION_TEMPLATES.filter((t) => t.status === "planned");
+  const research = QUESTION_TEMPLATES.filter((t) => t.status === "research");
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
@@ -61,17 +61,18 @@ export default function AdminRoadmapPage() {
           Question templates · roadmap
         </p>
         <h1 className="mb-3 font-[family-name:var(--font-space-grotesk)] text-3xl font-semibold leading-tight tracking-tight">
-          {live.length} live · {planned.length} planned
+          {live.length} live · {research.length} research-track
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-[var(--color-text-muted)]">
-          Every round is created automatically by{" "}
+          GeoCast runs <strong className="text-[var(--color-green)]">one</strong>{" "}
+          un-gameable question, every round, forever. The card below is the
+          live resolver; the rest are research-track stubs kept for
+          transparency (each was tested and found gameable — that's documented
+          on the card). New rounds are created by{" "}
           <code className="rounded border border-[var(--color-border)] bg-black/40 px-1.5 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-cyan)]">
             app:questions:suggest --continuous --ensure-queued
           </code>{" "}
-          on a 5-minute cron — no manual creation needed. Each card below is
-          one resolver class. Implement one, mark it{" "}
-          <span className="text-[var(--color-green)]">live</span>, and the next
-          cron tick will start producing rounds from it.
+          on a 5-minute cron.
         </p>
       </header>
 
@@ -91,11 +92,11 @@ export default function AdminRoadmapPage() {
         </div>
       </section>
 
-      {/* PLANNED section */}
+      {/* RESEARCH section */}
       <section>
-        <SectionHeader accent="amber" label={`Planned · ${planned.length}`} />
+        <SectionHeader accent="amber" label={`Research-track · ${research.length}`} />
         <div className="grid gap-3 lg:grid-cols-2">
-          {planned.map((t, i) => (
+          {research.map((t, i) => (
             <TemplateCard
               key={t.code}
               template={t}
@@ -232,7 +233,8 @@ function TemplateCard({
 
         {!live && (
           <p className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
-            implement: <span className="text-[var(--color-amber)]">apps/api/src/Service/Questions/Resolver/</span>
+            <span className="text-[var(--color-amber)]">not in rotation</span>
+            <span> · class exists, suggest() deactivated</span>
           </p>
         )}
       </GlassPanel>

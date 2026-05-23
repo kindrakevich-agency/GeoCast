@@ -87,7 +87,7 @@ export function QuestionCard({
 
           <div className="flex gap-3 text-xs text-[var(--color-text-muted)]">
             <Pill label="explorers" value={participants.toLocaleString()} />
-            <Pill label="pool" value={`${pool} cr`} accent />
+            <Pill label="pool" value={`${pool.toLocaleString()} USDC`} accent />
           </div>
         </div>
       </GlassPanel>

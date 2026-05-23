@@ -49,7 +49,18 @@ final class LargestWildfireResolver implements ResolverInterface
         return 'nasa-eonet.largest-wildfire';
     }
 
+    /**
+     * Deactivated 2026-05 — EONET wildfire events have hour-to-day
+     * advance notice via active fire feeds, making the answer easy to
+     * observe before close. GeoCast now runs a single un-gameable
+     * question via {@see AftershockResolver}. resolve() stays functional.
+     */
     public function suggest(\DateTimeImmutable $now): ?SuggestionDraft
+    {
+        return null;
+    }
+
+    private function suggestLegacy(\DateTimeImmutable $now): ?SuggestionDraft
     {
         $targetDay = $now->setTimezone(new \DateTimeZone('UTC'))->modify('+1 day')->setTime(0, 0, 0);
         $opensAt    = $targetDay;

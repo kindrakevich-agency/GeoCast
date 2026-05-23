@@ -9,13 +9,9 @@ export type ConfirmModalProps = {
   coords: LngLat | null;
   onConfirm: () => void;
   onCancel: () => void;
-  /** "1 credit" (default) or "1 USDC" for the on-chain flow. */
-  costLabel?: string;
-  /** When true, the modal explains the two-step approve+commit dance. */
-  onchain?: boolean;
 };
 
-export function ConfirmModal({ open, coords, onConfirm, onCancel, costLabel = "1 credit", onchain = false }: ConfirmModalProps) {
+export function ConfirmModal({ open, coords, onConfirm, onCancel }: ConfirmModalProps) {
   return (
     <AnimatePresence>
       {open && coords && (
@@ -61,22 +57,20 @@ export function ConfirmModal({ open, coords, onConfirm, onCancel, costLabel = "1
                 <div className="mt-3 flex items-center justify-between text-xs">
                   <span className="text-[var(--color-text-muted)]">Cost</span>
                   <span className="font-[family-name:var(--font-jetbrains-mono)]">
-                    {costLabel}
+                    1 USDC
                   </span>
                 </div>
               </div>
 
-              {onchain && (
-                <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-cyan)]/30 bg-[var(--color-cyan)]/5 p-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  <p className="mb-1 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)]">
-                    On-chain · two wallet signatures
-                  </p>
-                  <ol className="ml-4 list-decimal space-y-0.5">
-                    <li>Approve USDC spending (skipped if already approved)</li>
-                    <li>Commit your pin to the GeoCastPool contract</li>
-                  </ol>
-                </div>
-              )}
+              <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-cyan)]/30 bg-[var(--color-cyan)]/5 p-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                <p className="mb-1 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-cyan)]">
+                  On-chain · two wallet signatures
+                </p>
+                <ol className="ml-4 list-decimal space-y-0.5">
+                  <li>Approve USDC spending (skipped if already approved)</li>
+                  <li>Commit your pin to the GeoCastPool contract</li>
+                </ol>
+              </div>
 
               <div className="flex gap-3">
                 <button

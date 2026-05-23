@@ -85,9 +85,8 @@ export type AuthValue = {
   isSigningIn: boolean;
   signIn: () => Promise<void>;
   signOut: () => void;
-  /** Merge a partial update into the user state — e.g. fresh creditsBalance
-   *  after a successful pin placement. Used to keep TopBar in sync without
-   *  forcing an /api/me refetch. */
+  /** Merge a partial update into the user state — used to keep client-side
+   *  fields fresh without forcing an /api/me refetch. */
   updateUser: (partial: Partial<ApiUser>) => void;
   error: Error | null;
 };
@@ -120,9 +119,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Post-mount hydration: cached sessionStorage user paints instantly
   // (no flash), then a background /api/me refetch overwrites it with the
-  // latest server-side fields (credits_balance, games_played, total_score,
-  // is_admin). Without the refetch, gamesPlayed could stay stuck at the
-  // value it had on sign-in even after the user played more rounds.
+  // latest server-side fields (games_played, total_score, is_admin).
+  // Without the refetch, gamesPlayed could stay stuck at the value it had
+  // on sign-in even after the user played more rounds.
   useEffect(() => {
     const cached = loadSessionUser();
     if (cached) setUser(cached);

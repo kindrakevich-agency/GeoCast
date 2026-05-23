@@ -10,7 +10,7 @@ import { Typewriter } from "@/components/ui/Typewriter";
 import { landingStats as mockStats } from "@/lib/landing-pins";
 import { useAuth } from "@/hooks/useAuth";
 import { useStats } from "@/hooks/useStats";
-import { QUESTION_TEMPLATES, ALL_QUESTIONS } from "@/lib/question-templates";
+import { QUESTION_TEMPLATES, LIVE_QUESTIONS } from "@/lib/question-templates";
 import { ScoringMapVisualization } from "@/components/landing/ScoringMapVisualization";
 
 /**
@@ -85,7 +85,7 @@ function HeroSection({ onSignedIn }: { onSignedIn: () => void }) {
           className="overflow-hidden rounded-[var(--radius-xl)] p-9 text-center sm:p-10"
         >
           <p className="mb-4 text-[10px] uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
-            <PulseDot color="cyan" /> daily geo-prediction game · live
+            <PulseDot color="cyan" /> un-gameable geo-prediction game · live
           </p>
 
           <h1 className="mb-3 font-[family-name:var(--font-space-grotesk)] text-[clamp(2.6rem,7vw,4rem)] font-bold leading-none tracking-tight">
@@ -98,10 +98,10 @@ function HeroSection({ onSignedIn }: { onSignedIn: () => void }) {
           </h1>
 
           <p className="mb-2 text-lg text-[var(--color-text)]">
-            Drop a pin. Predict the world.
+            Predict where Earth will quake next.
           </p>
           <p className="mb-8 text-sm text-[var(--color-text-muted)]">
-            One question, one pin, closest answer wins the pool.
+            One un-gameable question. One pin. Closest to the next M5+ epicentre wins.
           </p>
 
           <ConnectWalletButton onSignedIn={onSignedIn} />
@@ -136,31 +136,31 @@ const STEPS = [
   },
   {
     n: "02",
-    title: "Drop one pin",
+    title: "Drop one pin during the 24h",
     body:
-      "Each round asks one question. Click anywhere on the world map to commit your prediction. One credit, one pin, no take-backs.",
+      "The map is open for 24 hours. Click anywhere to commit your prediction. One USDC, one pin, no take-backs. You can't see other players' pins until you've committed.",
     accent: "magenta" as const,
   },
   {
     n: "03",
-    title: "Data decides — not a human",
+    title: "Wait for the next quake",
     body:
-      "Round closes on the wall clock. A cron then queries the source API for the question (Open-Meteo for weather, USGS for earthquakes, etc.) and posts the truth automatically. No admin picks coordinates.",
+      "After the round closes, the live USGS feed is watched in real time. The first M5+ earthquake to strike anywhere on Earth is the truth — and the answer is impossible to know at commit time.",
     accent: "amber" as const,
   },
   {
     n: "04",
     title: "Closest pin wins biggest",
     body:
-      "Haversine distance, ranked. The pool is split by inverse distance — the closest pin gets the largest share, but even far pins earn a sliver.",
+      "Haversine distance to the epicentre, ranked. The pool splits by inverse distance — closest pin takes the largest share, but even a 5,000 km miss earns a sliver. Settled on-chain.",
     accent: "green" as const,
   },
 ];
 
-// Typewriter cycles through every question the game asks — live + planned.
-// Single source of truth in @/lib/question-templates so /admin and / stay
-// synced as new resolvers ship.
-const EXAMPLE_QUESTIONS = ALL_QUESTIONS;
+// GeoCast asks ONE question, forever — un-gameable by design. The
+// typewriter shows that single question (it gets to land for longer
+// without the rotation noise).
+const EXAMPLE_QUESTIONS = LIVE_QUESTIONS;
 
 function HowItWorksSection() {
   return (
@@ -168,9 +168,9 @@ function HowItWorksSection() {
       <div className="mx-auto max-w-6xl">
         <SectionEyebrow>How it works</SectionEyebrow>
         <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
-          One question per day.{" "}
-          <span style={{ color: "var(--color-cyan)" }}>One pin.</span>{" "}
-          <span style={{ color: "var(--color-magenta)" }}>One chance.</span>
+          One question, every round.{" "}
+          <span style={{ color: "var(--color-cyan)" }}>Un-gameable.</span>{" "}
+          <span style={{ color: "var(--color-magenta)" }}>One pin.</span>
         </h2>
 
         {/* Typewriter — cycles through example questions so visitors get
@@ -222,16 +222,16 @@ function HowItWorksSection() {
 // single most important credibility signal for a prediction game.
 
 // Group QUESTION_TEMPLATES by source name. One card per unique source —
-// status is "live" if AT LEAST ONE of its templates is live, else "planned".
-// Auto-folds when we ship new sources; no manual sync.
+// status is "live" if AT LEAST ONE of its templates is live, else "research"
+// (= explored, found gameable, kept on file).
 type SourceCard = {
   name: string;
   href: string;
-  status: "live" | "planned";
+  status: "live" | "research";
   statusAccent: "green" | "cyan";
   examples: string[];
   liveCount: number;
-  plannedCount: number;
+  researchCount: number;
 };
 
 const SOURCES: SourceCard[] = (() => {
@@ -240,29 +240,26 @@ const SOURCES: SourceCard[] = (() => {
     const card = grouped.get(t.source) ?? {
       name: t.source,
       href: t.sourceUrl,
-      status: "planned",
+      status: "research",
       statusAccent: "cyan",
       examples: [],
       liveCount: 0,
-      plannedCount: 0,
+      researchCount: 0,
     };
     if (t.status === "live") {
       card.liveCount += 1;
       card.status = "live";
       card.statusAccent = "green";
     } else {
-      card.plannedCount += 1;
+      card.researchCount += 1;
     }
     if (card.examples.length < 3) {
-      // Strip the leading "Where will" / "Which" for a tighter card bullet.
       card.examples.push(
         t.question.replace(/^Where will (the )?/i, "").replace(/\?$/, ""),
       );
     }
     grouped.set(t.source, card);
   }
-  // Live sources first, then planned. Within each group, more live-templates
-  // first.
   return Array.from(grouped.values()).sort((a, b) => {
     if (a.status !== b.status) return a.status === "live" ? -1 : 1;
     return b.liveCount - a.liveCount;
@@ -273,18 +270,27 @@ function ResolutionSourcesSection() {
   return (
     <section className="relative w-full px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl">
-        <SectionEyebrow>How answers are resolved</SectionEyebrow>
+        <SectionEyebrow>Why GeoCast can't be gamed</SectionEyebrow>
         <h2 className="mb-4 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
-          <span style={{ color: "var(--color-amber)" }}>No one picks the winner.</span>
+          <span style={{ color: "var(--color-amber)" }}>The answer hasn't happened yet</span>
           <br />
-          Public APIs do.
+          when you commit your pin.
         </h2>
+        <p className="mb-6 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
+          Most prediction games pick an answer that's already determined —
+          the hottest city is in tomorrow's forecast, the biggest wildfire
+          is already burning. <strong className="text-[var(--color-text)]">GeoCast doesn't.</strong>{" "}
+          The round opens, the map is open for 24 hours, then the round
+          closes — and only THEN does the clock start on the question.
+          The answer is the first M5+ earthquake to strike anywhere on
+          Earth after that moment.
+        </p>
         <p className="mb-12 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
-          When a round closes, a Symfony cron queries the question's source API,
-          finds the actual location of the answer, and posts the coordinates
-          on-chain (or off-chain, for credit rounds) — all without any
-          human choosing where the pin lands. The same data anyone can fetch
-          from the public endpoint is the data that decides who wins.
+          Earthquakes are the canonical un-predictable natural event — the
+          USGS itself has spent 60+ years failing to forecast them. No API
+          watching helps. No "wait until hour 23 and check what already
+          happened" trick. Reading the resolver source code (it's open) just
+          tells you the rules — not the answer. <strong className="text-[var(--color-text)]">Pure prediction. Pure skill.</strong>
         </p>
 
         {/* The pipeline */}
@@ -294,9 +300,9 @@ function ResolutionSourcesSection() {
               Resolution pipeline
             </p>
             <ol className="grid gap-4 sm:grid-cols-4">
-              <PipelineStep n="01" label="Round closes" detail="Cron flips status at closes_at" accent="amber" />
-              <PipelineStep n="02" label="Resolver fires" detail="API call to Open-Meteo / USGS / etc." accent="cyan" />
-              <PipelineStep n="03" label="Tie-break" detail="Hourly probe splits 0.1°C ties" accent="magenta" />
+              <PipelineStep n="01" label="Round closes" detail="No more pins accepted" accent="amber" />
+              <PipelineStep n="02" label="Clock starts" detail="Live USGS feed watched in real time" accent="cyan" />
+              <PipelineStep n="03" label="First M5+ hits" detail="Epicentre coords become the truth" accent="magenta" />
               <PipelineStep n="04" label="Payout" detail="Haversine rank → pool split → on-chain" accent="green" />
             </ol>
           </GlassPanel>
@@ -325,7 +331,7 @@ function ResolutionSourcesSection() {
                     status={s.status}
                     accent={s.statusAccent}
                     liveCount={s.liveCount}
-                    plannedCount={s.plannedCount}
+                    researchCount={s.researchCount}
                   />
                 </div>
 
@@ -406,19 +412,16 @@ function StatusPill({
   status,
   accent,
   liveCount,
-  plannedCount,
+  researchCount,
 }: {
-  status: "live" | "planned";
+  status: "live" | "research";
   accent: "cyan" | "magenta" | "amber" | "green";
   liveCount?: number;
-  plannedCount?: number;
+  researchCount?: number;
 }) {
-  // For source cards, optionally surface the live/planned breakdown as
-  // a small count after the pill so visitors can see at-a-glance how
-  // much of a source is already shipped vs. still queued.
   const detail =
-    liveCount !== undefined && plannedCount !== undefined
-      ? ` · ${liveCount} live / ${plannedCount} planned`
+    liveCount !== undefined && researchCount !== undefined
+      ? ` · ${liveCount} live / ${researchCount} research`
       : "";
   return (
     <span
@@ -434,7 +437,7 @@ function StatusPill({
           live{detail}
         </>
       )}
-      {status === "planned" && <>planned{detail}</>}
+      {status === "research" && <>research{detail}</>}
     </span>
   );
 }
@@ -630,7 +633,7 @@ function FinalCTASection({ onSignedIn }: { onSignedIn: () => void }) {
           </h2>
           <ConnectWalletButton onSignedIn={onSignedIn} />
           <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
-            free · 100 starter credits
+            on Base Sepolia · test USDC, mint on demand
           </p>
         </GlassPanel>
       </motion.div>
@@ -649,11 +652,23 @@ function FinalCTASection({ onSignedIn }: { onSignedIn: () => void }) {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "What is GeoCast?",
-    a: "GeoCast is a continuous-round geo-prediction game. Every round we publish one question — \"Where will the next M5+ earthquake strike in the next 24 hours?\", \"Where will the hottest European capital be in the next 24 hours?\" — and every player drops a single pin on a world map. Each round runs for exactly 24 hours; the next one opens the second the previous one ends. After a round closes, the real location is fetched from a public API and players are ranked by haversine distance. The closest pin takes the biggest share of the pool, but even far-away guesses earn a sliver: scoring is inverse-distance, not winner-takes-all.",
+    a: "GeoCast is a geo-prediction game with one question, forever: \"Where will the first M5+ earthquake strike in the 24 hours after this round closes?\" The map is open for 24 hours of commits. Players each drop a single pin. The round closes, and only then does the live USGS earthquake feed start being watched in real time — the first M5+ event to strike anywhere on Earth wins, and the closest pin to its epicentre takes the biggest share of the pool.",
+  },
+  {
+    q: "Why one question forever — isn't variety more fun?",
+    a: "Variety is fun until it becomes a leaky abstraction. We tested questions about hottest capitals, wildfires, rainfall — every weather/forecast question is gameable: an analyst with API access can query Open-Meteo's 24h forecast and basically know the answer when the round opens. Earthquakes are different. Seismologists at USGS have spent 60+ years trying to forecast them and still publish the disclaimer 'no method has been proven successful'. The event hasn't happened at commit time. Pure prediction, pure skill. One question is the right number when the question is right.",
+  },
+  {
+    q: "Can I cheat by querying the USGS API myself?",
+    a: "No — and the resolver source code is public so you can verify. The 24h commit window is BEFORE the answer event happens. There's no data to scrape — the M5+ that decides the round hasn't been detected yet. After the round closes, you could watch the same USGS feed the cron watches, but by then commits are closed.",
+  },
+  {
+    q: "What if no M5+ earthquake happens in 24 hours after close?",
+    a: "Global M5+ rate is ~4 per day, so the expected wait is ~6 hours. About 92% of 4h windows have an M5+; about 99% of 8h windows do. As a safety net the magnitude floor walks down: M5+ for the first 4 hours, then M4.5+ for the next 4, then M4+ for the rest of the 24h window. M4+ globally is ~50/day so resolution within 24h is essentially guaranteed.",
   },
   {
     q: "Is GeoCast free to play?",
-    a: "Yes. New accounts start with 100 in-game credits and each pin costs one credit. There are no top-ups, no purchases, and no subscriptions. The on-chain mode uses test USDC on Base Sepolia for portfolio demos; the production game is free.",
+    a: "GeoCast runs on Base Sepolia using test USDC, not real money. Each pin costs 1 test USDC into the GeoCastPool contract; after the M5+ epicentre is determined, the auto-resolver settles the pool on-chain and winners claim their share via Merkle proof. If your wallet is short on test USDC there's a one-click faucet button on the round page — no top-ups, no purchases, no subscriptions.",
   },
   {
     q: "Do I need a crypto wallet?",
@@ -664,16 +679,12 @@ const FAQ: { q: string; a: string }[] = [
     a: "Using the haversine formula on a sphere of radius 6,371 km — the standard great-circle distance between two latitude/longitude points. The math runs server-side in MariaDB via ST_Distance_Sphere on indexed SPATIAL POINT columns, so ranking thousands of pins on round resolution is sub-second.",
   },
   {
-    q: "Who decides where the correct answer is?",
-    a: "Nobody — a public API does. When a round closes, a cron job queries the question's source endpoint (Open-Meteo for weather, USGS for earthquakes, NASA FIRMS for wildfires, etc.) and posts the actual answer coordinates automatically. There is no admin button that places the pin. The same data anyone can fetch from the public endpoint is the data that decides the round, which makes outcomes verifiable and tamper-resistant. If a daily aggregate is tied (two cities at the same max temperature), a second hourly probe breaks it; if a true tie survives, the round resolves multi-winner and your distance scores against the closest of the tied locations.",
-  },
-  {
     q: "How is the prize pool split?",
-    a: "Each prediction earns a raw score of 1 / (1 + distance_km). Your payout is your share of the round pool: floor(pool × your_raw_score ÷ sum_of_raw_scores). This long-tail curve guarantees that the closest pin always wins the biggest share, while still rewarding casual players who weren't quite right — no zero-sum trap.",
+    a: "Each prediction earns a raw score of 1 / (1 + distance_km). Your payout is your share of 95% of the pool (5% goes to the protocol treasury): floor(0.95 × pool × your_raw_score ÷ sum_of_raw_scores). This long-tail curve guarantees that the closest pin always wins the biggest share, while still rewarding pins thousands of km away — no zero-sum trap.",
   },
   {
     q: "Is GeoCast a prediction market?",
-    a: "No. GeoCast is a geo-prediction game, not a regulated prediction market. There are no derivatives, no shares, and no real-money speculation in the live product. The pool is split pro-rata by accuracy of a geographic guess, not by buying contracts against an outcome. The optional on-chain mode is testnet-only and exists to demonstrate the architecture for a senior full-stack portfolio.",
+    a: "No. GeoCast is a geo-prediction game, not a regulated prediction market. There are no derivatives, no shares, no real-money speculation. The pool is split pro-rata by accuracy of a geographic guess. The on-chain mode is testnet-only and exists to demonstrate the architecture for a senior full-stack portfolio.",
   },
   {
     q: "What does the leaderboard show?",
@@ -681,7 +692,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Who builds GeoCast?",
-    a: "GeoCast is built solo by Vitalii Kindrakevych (kindrakevich-agency) as a senior full-stack portfolio piece. Stack: Next.js 16 + Tailwind 4 + MapLibre + wagmi on the front; Symfony 7.4 + API Platform + MariaDB SPATIAL + Predis on the back; Pusher Channels for real-time presence; Foundry + OpenZeppelin contracts for the optional on-chain pool on Base. Source is open at github.com/kindrakevich-agency/GeoCast.",
+    a: "GeoCast is built solo by Vitalii Kindrakevych (kindrakevich-agency) as a senior full-stack portfolio piece. Stack: Next.js 16 + Tailwind 4 + MapLibre + wagmi on the front; Symfony 7.4 + API Platform + MariaDB SPATIAL + Predis on the back; Pusher Channels for real-time presence; Foundry + OpenZeppelin contracts for the on-chain pool on Base. Source is open at github.com/kindrakevich-agency/GeoCast.",
   },
 ];
 
@@ -704,7 +715,7 @@ function SeoSection() {
     name: "GeoCast",
     url: "https://geocast.games",
     description:
-      "Daily geo-prediction game. Drop a pin on a world map; closest guess wins the round pool.",
+      "Un-gameable geo-prediction game. Pin where the next M5+ earthquake will strike — the answer doesn't exist yet when you commit.",
     inLanguage: "en",
   };
 
@@ -721,19 +732,21 @@ function SeoSection() {
       <div className="mx-auto max-w-4xl">
         <SectionEyebrow>About</SectionEyebrow>
         <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.5rem,3.4vw,2.1rem)] font-semibold leading-tight tracking-tight">
-          The world's only{" "}
-          <span style={{ color: "var(--color-cyan)" }}>daily geo-prediction game</span>.
+          The only{" "}
+          <span style={{ color: "var(--color-cyan)" }}>un-gameable geo-prediction game</span>.
         </h2>
 
         <div className="space-y-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
           <p>
-            GeoCast asks one question per day — about earthquakes, weather, headlines,
-            elections, sport, anything that pins to a place on Earth — and gives every
-            player exactly one pin on a world map to commit their answer. Twenty-four
-            hours later the truth is revealed and a haversine-ranked leaderboard
-            settles the round. The closest pin earns the biggest share of the pool,
-            but even a 2,000 km miss still pays a sliver: scoring is inverse-distance,
-            engagement-friendly, and never zero-sum.
+            GeoCast asks one question, every round, forever:{" "}
+            <em className="text-[var(--color-text)]">Where will the first M5+
+            earthquake strike in the 24 hours after this round closes?</em>{" "}
+            Players have 24 hours of an open map to commit a single pin. Then
+            the round closes, the clock starts, and the live USGS earthquake feed
+            is watched in real time. The first M5+ event to strike anywhere on
+            Earth is the truth. Closest pin to the epicentre takes the biggest
+            share of the pool — inverse-distance scoring, never zero-sum, even
+            a 5,000 km miss still pays a sliver.
           </p>
           <p>
             The whole canvas is a full-screen MapLibre vector map (Carto Dark Matter
@@ -742,27 +755,27 @@ function SeoSection() {
             password, no tracking — and your address is your account. Real-time
             presence dots show other players' cursors as they hover the map; pin
             placements broadcast over Pusher to every connected viewer. When the
-            round closes a cron queries the question's source API and posts the
-            answer pin automatically — a great-circle line draws from your pin
-            to the truth and your distance badge pulses in.
+            first M5+ hits, the answer pin drops, a great-circle line draws from
+            your pin to the truth, and your distance badge pulses in.
           </p>
           <p>
-            <strong className="text-[var(--color-text)]">Answers are not picked by a human.</strong>{" "}
-            Every question is paired with a resolver — a small PHP class that
-            knows how to fetch the truth from a public API at round-close time.
-            Today the weather questions resolve through{" "}
+            <strong className="text-[var(--color-text)]">The answer doesn't exist when you commit.</strong>{" "}
+            That's the difference. Most prediction games pick a winner from
+            data that already determines the outcome — tomorrow's weather
+            forecast, today's burning wildfire, this week's hottest capital.
+            GeoCast doesn't. The answer event physically hasn't happened
+            yet, and earthquakes are the canonical un-predictable natural
+            event. The resolver source code is{" "}
             <a
-              href="https://open-meteo.com/"
+              href="https://github.com/kindrakevich-agency/GeoCast"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[var(--color-cyan)] underline-offset-4 hover:underline"
             >
-              Open-Meteo
-            </a>{" "}(forecast + observed archive across ~47 European capitals,
-            with hourly tie-break on 0.1°C ties); earthquakes will route through
-            the USGS FDSN feed, wildfires through NASA FIRMS, geo-tagged headlines
-            through GDELT. No admin button places the pin; the data anyone can
-            fetch from the public endpoint is the data that decides the round.
+              open on GitHub
+            </a>{" "}
+            so anyone can verify the rules. Reading the code tells you how
+            the answer is fetched — not what it will be.
           </p>
           <p>
             Built solo as a portfolio piece for the senior full-stack surface:

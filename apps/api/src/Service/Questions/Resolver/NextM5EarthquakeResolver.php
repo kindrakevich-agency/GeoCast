@@ -49,28 +49,16 @@ final class NextM5EarthquakeResolver implements ResolverInterface
         return 'usgs.next-m5-earthquake';
     }
 
+    /**
+     * Deactivated 2026-05 — superseded by {@see AftershockResolver}, which
+     * uses the same data source but flips the time semantics from
+     * "first event in the open window" (gameable via live API watching)
+     * to "first event AFTER the round closes" (genuinely un-predictable).
+     * resolve() stays functional for historical rounds.
+     */
     public function suggest(\DateTimeImmutable $now): ?SuggestionDraft
     {
-        $targetDay = $now->setTimezone(new \DateTimeZone('UTC'))->modify('+1 day')->setTime(0, 0, 0);
-        $opensAt    = $targetDay;
-        $closesAt   = $targetDay->setTime(23, 59, 59);
-        $resolvesAt = $closesAt->modify('+5 minutes');
-
-        return new SuggestionDraft(
-            resolverCode: $this->code(),
-            resolverParams: [
-                'windowStart' => $opensAt->format(\DateTimeInterface::ATOM),
-                'windowEnd'   => $closesAt->format(\DateTimeInterface::ATOM),
-            ],
-            question: 'Where will the next M5+ earthquake strike in the next 24 hours?',
-            opensAt: $opensAt,
-            closesAt: $closesAt,
-            resolvesAt: $resolvesAt,
-            preview: [
-                'source'   => 'USGS FDSN Event Service',
-                'fallback' => 'M4.5+ if no M5+ events in the window',
-            ],
-        );
+        return null;
     }
 
     public function resolve(array $params, \DateTimeImmutable $resolvesAt): ResolutionResult
