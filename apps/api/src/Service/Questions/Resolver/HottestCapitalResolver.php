@@ -7,47 +7,29 @@ namespace App\Service\Questions\Resolver;
 use App\Service\Questions\AnswerPoint;
 use App\Service\Questions\ResolutionResult;
 use App\Service\Questions\ResolverInterface;
-use App\Service\Questions\Source\EuropeanCapitals;
 use App\Service\Questions\Source\OpenMeteoClient;
+use App\Service\Questions\Source\WorldCapitals;
 use App\Service\Questions\SuggestionDraft;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * "Where will the hottest European capital be in the next 24 hours?"
+ * "Where will the hottest world capital be in the next 24 hours?"
  *
- * Suggest: queries Open-Meteo forecast for ~47 European capitals' daily max
- * temperature on (now + 1 calendar day in UTC). Stores the target ISO date
- * in resolverParams so resolve() asks for the same day later. In
- * continuous-rounds mode (QuestionsSuggestCommand --continuous) the
- * command re-timestamps the draft so opens_at = previous_round.closes_at + 1s
- * — the 24h window starts whenever the previous round ended, not at
- * UTC midnight.
+ * Candidate set: ~244 cities = 195 UN capitals + 49 top non-capital metros
+ * (NYC, LA, Shanghai, Mumbai, São Paulo, Lagos, Cape Town, Sydney, …).
  *
- * Resolve: reads the same cities from the archive endpoint (observed, not
- * forecast). Picks the city with the highest temperature_2m_max. If two or
- * more cities are within 0.05°C of each other on the daily aggregate, breaks
- * the tie with the hourly archive — comparing the peak observed temperature
- * down to the 0.1°C precision Open-Meteo actually publishes. If a tie still
- * survives, returns all tied cities as multi-winner points.
+ * Suggest: Open-Meteo forecast of daily max temperature for every
+ * candidate. Picks the city with the highest forecast.
  *
- * Round timing (UTC, continuous mode):
- *
- *   opens_at = prev.closes_at + 1s     closes_at = opens_at + 24h    resolves_at = closes_at + 5m
- *   ┌────────────────────────────────────────┬──────────────────┬─────────────────┐
- *   │ players commit pins to the 24h window  │ reveal window    │ archive read    │
- *   │ (chained back-to-back with prev round) │ for on-chain     │ + auto-resolve  │
- *   └────────────────────────────────────────┴──────────────────┴─────────────────┘
- *
- * The 6h archive lag is deliberate — Open-Meteo's archive endpoint usually
- * has the previous day populated by ~02:00 UTC, but 06:00 leaves room for
- * the occasional delay.
+ * Resolve: Open-Meteo archive endpoint (observed, not forecast). Two-stage
+ * tie-break — if the daily aggregate is within 0.05°C, probe the hourly
+ * archive at 0.1°C precision. If a tie still survives, returns all tied
+ * cities as multi-winner points (round scores by min-distance).
  */
-final class HottestEuropeanCapitalResolver implements ResolverInterface
+final class HottestCapitalResolver implements ResolverInterface
 {
-    /** Maximum daily-aggregate gap (°C) below which we look at hourly data. */
     private const TIE_THRESHOLD_DAILY = 0.05;
-    /** Maximum hourly peak gap (°C) we treat as a true tie. */
     private const TIE_THRESHOLD_HOURLY = 0.001;
 
     public function __construct(
@@ -58,7 +40,7 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
 
     public function code(): string
     {
-        return 'openmeteo.hottest-european-capital';
+        return 'openmeteo.hottest-capital';
     }
 
     public function suggest(\DateTimeImmutable $now): ?SuggestionDraft
@@ -67,16 +49,12 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
 
         try {
             $temps = $this->client->dailyMaxTemperature(
-                EuropeanCapitals::latitudes(),
-                EuropeanCapitals::longitudes(),
+                WorldCapitals::latitudes(),
+                WorldCapitals::longitudes(),
                 $targetDay,
             );
         } catch (\Throwable $e) {
-            // Source unavailable — log the actual reason so the next outage
-            // doesn't show up as a mysterious "no candidate today". Returning
-            // null lets other resolvers try; cron decides whether to write
-            // zero suggestions or partial.
-            $this->logger->warning('openmeteo.hottest-european-capital suggest() failed', [
+            $this->logger->warning('openmeteo.hottest-capital suggest() failed', [
                 'targetDay' => $targetDay->format('Y-m-d'),
                 'exception' => $e::class,
                 'message'   => $e->getMessage(),
@@ -84,7 +62,7 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
             return null;
         }
 
-        $capitals = EuropeanCapitals::all();
+        $capitals = WorldCapitals::all();
         $rows = [];
         foreach ($capitals as $i => $c) {
             $t = $temps[$i] ?? null;
@@ -98,16 +76,14 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
         }
         usort($rows, static fn (array $a, array $b): int => $b['temp'] <=> $a['temp']);
 
-        // Round timing — opens at midnight of the target day, closes at the
-        // end of it, resolves 6h after close (when archive has populated).
-        $opensAt    = $targetDay; // 00:00 UTC of T+1
+        $opensAt    = $targetDay;
         $closesAt   = $targetDay->setTime(23, 59, 59);
-        $resolvesAt = $targetDay->modify('+1 day')->setTime(6, 0, 0); // 06:00 UTC of T+2
+        $resolvesAt = $targetDay->modify('+1 day')->setTime(6, 0, 0);
 
         return new SuggestionDraft(
             resolverCode: $this->code(),
             resolverParams: ['date' => $targetDay->format('Y-m-d')],
-            question: 'Where will the hottest European capital be in the next 24 hours?',
+            question: 'Where will the hottest world capital be in the next 24 hours?',
             opensAt: $opensAt,
             closesAt: $closesAt,
             resolvesAt: $resolvesAt,
@@ -123,18 +99,17 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
     {
         $date = $params['date'] ?? null;
         if (!\is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-            throw new \RuntimeException('Missing/invalid `date` param for hottest-european-capital resolver.');
+            throw new \RuntimeException('Missing/invalid `date` param for hottest-capital resolver.');
         }
         $target = new \DateTimeImmutable($date, new \DateTimeZone('UTC'));
 
-        $capitals = EuropeanCapitals::all();
+        $capitals = WorldCapitals::all();
         $temps = $this->client->dailyMaxTemperatureArchive(
-            EuropeanCapitals::latitudes(),
-            EuropeanCapitals::longitudes(),
+            WorldCapitals::latitudes(),
+            WorldCapitals::longitudes(),
             $target,
         );
 
-        // Build the daily ranking, dropping nulls (cells with no archive data).
         $rows = [];
         foreach ($capitals as $i => $c) {
             $t = $temps[$i] ?? null;
@@ -145,26 +120,22 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
         }
         if ($rows === []) {
             throw new \RuntimeException(sprintf(
-                'No archive temperature data for any European capital on %s — try again later.',
+                'No archive temperature data for any world capital on %s — try again later.',
                 $date,
             ));
         }
         usort($rows, static fn (array $a, array $b): int => $b['tempDaily'] <=> $a['tempDaily']);
 
-        // Pull off everyone within TIE_THRESHOLD_DAILY of the leader.
         $leaderTemp = $rows[0]['tempDaily'];
         $tied = array_values(array_filter(
             $rows,
             static fn (array $r): bool => abs($r['tempDaily'] - $leaderTemp) <= self::TIE_THRESHOLD_DAILY,
         ));
 
-        // No tie at the daily level — single winner, return immediately.
         if (\count($tied) === 1) {
             return $this->singleWinner($tied[0], $rows);
         }
 
-        // Tie-break: ask Open-Meteo for hourly data on JUST the tied cities
-        // and compare peak observed temperatures.
         $tiedLats = array_map(static fn (array $r): float => $r['lat'], $tied);
         $tiedLngs = array_map(static fn (array $r): float => $r['lng'], $tied);
         $peaks = $this->client->hourlyPeakTemperatureArchive($tiedLats, $tiedLngs, $target);
@@ -180,7 +151,6 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
                 'peakHour'  => $peaks[$i]['hour'] ?? null,
             ];
         }
-        // Sort by hourly peak desc (null peaks sink to the bottom).
         usort($hourly, static function (array $a, array $b): int {
             $pa = $a['peak'] ?? -INF;
             $pb = $b['peak'] ?? -INF;
@@ -189,8 +159,6 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
 
         $leaderPeak = $hourly[0]['peak'];
         if ($leaderPeak === null) {
-            // Hourly data missing for everyone — fall back to first tied
-            // city alphabetically for determinism.
             usort($tied, static fn (array $a, array $b): int => strcmp($a['name'], $b['name']));
             return $this->singleWinner($tied[0], $rows, ['fallback' => 'alphabetical-on-no-hourly']);
         }
@@ -205,7 +173,6 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
             return $this->singleWinner($survivors[0], $rows, ['tieBrokenBy' => 'hourly']);
         }
 
-        // True tie — multi-winner round.
         $points = array_map(
             static fn (array $r): AnswerPoint => new AnswerPoint($r['lat'], $r['lng'], $r['name']),
             $survivors,
@@ -218,7 +185,7 @@ final class HottestEuropeanCapitalResolver implements ResolverInterface
     }
 
     /**
-     * @param array{name: string, lat: float, lng: float, tempDaily: float} $winner
+     * @param array{name: string, lat: float, lng: float, tempDaily?: float} $winner
      * @param list<array{name: string, lat: float, lng: float, tempDaily: float}> $allRows
      * @param array<string, mixed> $extraContext
      */

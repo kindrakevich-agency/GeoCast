@@ -4,35 +4,34 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\Questions;
 
-use App\Service\Questions\Resolver\HottestEuropeanCapitalResolver;
-use App\Service\Questions\Source\EuropeanCapitals;
+use App\Service\Questions\Resolver\HottestCapitalResolver;
 use App\Service\Questions\Source\OpenMeteoClient;
+use App\Service\Questions\Source\WorldCapitals;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
- * HottestEuropeanCapitalResolver — covers the three resolution paths:
+ * HottestCapitalResolver — covers the three resolution paths:
  *
  *   1. Single clear winner — daily aggregate has one city ahead by > 0.05°C
  *   2. Tie at daily, broken by hourly — two cities tie at 32.1°C daily,
  *      hourly peaks reveal one was actually higher
  *   3. True multi-winner — two cities identical at hourly resolution too
  *
- * The daily endpoint is asked for ALL ~47 capitals, so we have to stub a
- * full array of responses keyed by input order. EuropeanCapitals::all()
- * is the canonical order.
+ * The daily endpoint is asked for ALL ~244 cities (195 capitals + 49
+ * megacities), so we stub a full array of responses keyed by input order.
+ * WorldCapitals::all() is the canonical order.
  */
-final class HottestEuropeanCapitalResolverTest extends TestCase
+final class HottestCapitalResolverTest extends TestCase
 {
     public function testSingleClearWinner(): void
     {
-        // Build a per-city daily-temp dataset where Madrid is clearly hottest.
         $temps = $this->flatTemps(20.0);
         $temps[$this->idxOf('Madrid')] = 35.0;
         $temps[$this->idxOf('Rome')] = 30.0;
 
-        $resolver = new HottestEuropeanCapitalResolver(
+        $resolver = new HottestCapitalResolver(
             new OpenMeteoClient(new MockHttpClient($this->respondDaily($temps))),
         );
 
@@ -43,14 +42,10 @@ final class HottestEuropeanCapitalResolverTest extends TestCase
 
     public function testTieAtDailyBrokenByHourly(): void
     {
-        // Madrid and Rome both at 32.1°C daily.
         $temps = $this->flatTemps(20.0);
         $temps[$this->idxOf('Madrid')] = 32.1;
         $temps[$this->idxOf('Rome')] = 32.1;
 
-        // After the daily call, the resolver issues a second hourly call
-        // for ONLY the tied cities. The MockHttpClient cycles through
-        // pre-queued responses in order.
         $hourlyBody = json_encode([
             [
                 'hourly' => [
@@ -66,7 +61,7 @@ final class HottestEuropeanCapitalResolverTest extends TestCase
             ],
         ]);
 
-        $resolver = new HottestEuropeanCapitalResolver(
+        $resolver = new HottestCapitalResolver(
             new OpenMeteoClient(new MockHttpClient([
                 $this->respondDailyOnce($temps),
                 new MockResponse($hourlyBody),
@@ -85,13 +80,12 @@ final class HottestEuropeanCapitalResolverTest extends TestCase
         $temps[$this->idxOf('Madrid')] = 32.1;
         $temps[$this->idxOf('Rome')] = 32.1;
 
-        // Identical hourly peaks too — multi-winner.
         $hourlyBody = json_encode([
             ['hourly' => ['time' => ['2026-05-21T17:00'], 'temperature_2m' => [32.1]]],
             ['hourly' => ['time' => ['2026-05-21T17:00'], 'temperature_2m' => [32.1]]],
         ]);
 
-        $resolver = new HottestEuropeanCapitalResolver(
+        $resolver = new HottestCapitalResolver(
             new OpenMeteoClient(new MockHttpClient([
                 $this->respondDailyOnce($temps),
                 new MockResponse($hourlyBody),
@@ -107,7 +101,7 @@ final class HottestEuropeanCapitalResolverTest extends TestCase
 
     public function testRejectsMissingDateParam(): void
     {
-        $resolver = new HottestEuropeanCapitalResolver(
+        $resolver = new HottestCapitalResolver(
             new OpenMeteoClient(new MockHttpClient([])),
         );
 
@@ -116,16 +110,16 @@ final class HottestEuropeanCapitalResolverTest extends TestCase
         $resolver->resolve([], new \DateTimeImmutable());
     }
 
-    /** Build a flat list of temperatures, one per capital. */
+    /** Build a flat list of temperatures, one per candidate city. */
     private function flatTemps(float $base): array
     {
-        return array_fill(0, count(EuropeanCapitals::all()), $base);
+        return array_fill(0, count(WorldCapitals::all()), $base);
     }
 
-    /** Index of a named capital in EuropeanCapitals::all(). */
+    /** Index of a named capital in WorldCapitals::all(). */
     private function idxOf(string $name): int
     {
-        foreach (EuropeanCapitals::all() as $i => $c) {
+        foreach (WorldCapitals::all() as $i => $c) {
             if ($c['name'] === $name) return $i;
         }
         throw new \LogicException("No capital named '$name' — update the dataset or fix the test.");

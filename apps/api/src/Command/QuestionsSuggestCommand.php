@@ -175,12 +175,22 @@ final class QuestionsSuggestCommand extends Command
             // of resolvesAt — so the player-visible hand-off stays seamless
             // while the on-chain reveal window overlaps with the next
             // round's commit window (different round IDs, no conflict).
+            //
+            // resolverParams gains windowStart + windowEnd here so any
+            // time-window-sensitive resolver (USGS earthquakes, NASA FIRMS
+            // wildfires — anything timestamp-precise rather than daily-
+            // aggregate) can pick them up at resolve time without having
+            // to re-derive the timing from resolvesAt + a buffer convention.
             if ($continuous && $nextOpensAt !== null) {
                 $closesAt = $nextOpensAt->add(new \DateInterval(self::ROUND_DURATION));
                 $resolvesAt = $closesAt->modify('+5 minutes');
                 $draft = new SuggestionDraft(
                     resolverCode: $draft->resolverCode,
-                    resolverParams: ['date' => $nextOpensAt->format('Y-m-d')],
+                    resolverParams: [
+                        'date'        => $nextOpensAt->format('Y-m-d'),
+                        'windowStart' => $nextOpensAt->format(\DateTimeInterface::ATOM),
+                        'windowEnd'   => $closesAt->format(\DateTimeInterface::ATOM),
+                    ],
                     question: $draft->question,
                     opensAt: $nextOpensAt,
                     closesAt: $closesAt,

@@ -39,13 +39,40 @@ type QuestionTemplate = {
 const TEMPLATES: QuestionTemplate[] = [
   // ---- LIVE ----
   {
-    code: "openmeteo.hottest-european-capital",
+    code: "openmeteo.hottest-capital",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
-    question: "Where will the hottest European capital be in the next 24 hours?",
+    question: "Where will the hottest world capital be in the next 24 hours?",
     status: "live",
     blurb:
-      "Daily forecast + observed archive across ~47 European capitals. Two-stage tie-break: daily aggregate → hourly archive peak.",
+      "Daily forecast + observed archive across 244 candidates (195 UN capitals + 49 top metros). Two-stage tie-break: daily aggregate → hourly archive peak.",
+  },
+  {
+    code: "openmeteo.coldest-capital",
+    source: "Open-Meteo",
+    sourceUrl: "https://open-meteo.com/",
+    question: "Where will the coldest world capital be in the next 24 hours?",
+    status: "live",
+    blurb:
+      "Mirror image of hottest. Same 244-city dataset, ranked by daily temperature_2m_min ascending — Yakutsk, Reykjavik, Ulaanbaatar are regulars.",
+  },
+  {
+    code: "usgs.next-m5-earthquake",
+    source: "USGS Earthquakes",
+    sourceUrl: "https://earthquake.usgs.gov/",
+    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
+    status: "live",
+    blurb:
+      "Real-time FDSN feed of M5+ events globally. ~4 M5+ per day worldwide; falls back to M4.5+ on quiet 24h windows (22% of random windows have zero M5+).",
+  },
+  {
+    code: "nasa-eonet.largest-wildfire",
+    source: "NASA EONET",
+    sourceUrl: "https://eonet.gsfc.nasa.gov/",
+    question: "Where will the largest active wildfire be in the next 24 hours?",
+    status: "live",
+    blurb:
+      "Earth Observatory Natural Event Tracker — pre-clustered wildfire events worldwide. Ranked by magnitudeValue (acres), falls back to most-recent update on size-less entries.",
   },
 
   // ---- PLANNED (Open-Meteo, same plumbing) ----
@@ -56,16 +83,16 @@ const TEMPLATES: QuestionTemplate[] = [
     question: "Where will the heaviest rainfall fall in the next 24 hours?",
     status: "planned",
     blurb:
-      "Same ~47-capital dataset, ranked by 24h precipitation_sum instead of temperature.",
+      "Same 244-city dataset, ranked by 24h precipitation_sum instead of temperature.",
   },
   {
     code: "openmeteo.strongest-wind-gust",
     source: "Open-Meteo",
     sourceUrl: "https://open-meteo.com/",
-    question: "Where will the strongest wind gust hit a coastal capital in the next 24 hours?",
+    question: "Where will the strongest wind gust hit a coastal city in the next 24 hours?",
     status: "planned",
     blurb:
-      "Subset to coastal capitals only (~30). Ranked by wind_gusts_10m_max over the 24h window.",
+      "Coastal subset (~85 cities flagged in WorldCapitals). Ranked by wind_gusts_10m_max over the 24h window.",
   },
   {
     code: "openmeteo.biggest-temp-swing",
@@ -74,27 +101,36 @@ const TEMPLATES: QuestionTemplate[] = [
     question: "Which capital will have the biggest day-night temperature swing in the next 24 hours?",
     status: "planned",
     blurb:
-      "Rank by (temperature_2m_max − temperature_2m_min) over the 24h window.",
+      "Rank by (temperature_2m_max − temperature_2m_min) over the 24h window. Desert capitals (Riyadh, Doha) dominate dry seasons.",
+  },
+  {
+    code: "openmeteo.highest-uv-index",
+    source: "Open-Meteo",
+    sourceUrl: "https://open-meteo.com/",
+    question: "Where will the highest UV index reading land in the next 24 hours?",
+    status: "planned",
+    blurb:
+      "Rank by uv_index_max — equatorial + high-altitude cities (Quito, La Paz) lead consistently.",
   },
 
   // ---- PLANNED (other sources) ----
   {
-    code: "usgs.next-m5-earthquake",
-    source: "USGS Earthquakes",
-    sourceUrl: "https://earthquake.usgs.gov/",
-    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
+    code: "noaa.next-tropical-storm",
+    source: "NOAA NHC",
+    sourceUrl: "https://www.nhc.noaa.gov/",
+    question: "Where will the next named-storm landfall happen in the next 24 hours?",
     status: "planned",
     blurb:
-      "Real-time FDSN feed of M2.5+ events. ~4 M5+ globally per day; fall back to M4.5+ on quiet 24h windows.",
+      "National Hurricane Center cone forecasts. Restricted to active basins (Atlantic / E-Pacific / W-Pacific via JMA + JTWC mirrors).",
   },
   {
-    code: "nasa-firms.largest-wildfire",
-    source: "NASA FIRMS",
-    sourceUrl: "https://firms.modaps.eosdis.nasa.gov/",
-    question: "Where will the largest active wildfire be in the next 24 hours?",
+    code: "noaa.aurora-visibility",
+    source: "NOAA Space Weather",
+    sourceUrl: "https://www.swpc.noaa.gov/",
+    question: "Where will the aurora be visible in the next 24 hours?",
     status: "planned",
     blurb:
-      "MODIS/VIIRS active-fire detections, ranked by 24h-cumulative FRP (Fire Radiative Power).",
+      "OVATION Prime aurora forecast — pick the southernmost latitude crossing the Kp-index visibility threshold.",
   },
   {
     code: "gdelt.biggest-news-event",
@@ -106,13 +142,13 @@ const TEMPLATES: QuestionTemplate[] = [
       "Realtime geo-tagged news, 24h window. Rank by event Goldstein scale + mention count.",
   },
   {
-    code: "noaa.aurora-visibility",
-    source: "NOAA Space Weather",
-    sourceUrl: "https://www.swpc.noaa.gov/",
-    question: "Where will the aurora be visible in the next 24 hours?",
+    code: "openmeteo.clearest-stargazing",
+    source: "Open-Meteo",
+    sourceUrl: "https://open-meteo.com/",
+    question: "Which dark-sky site will have the clearest skies in the next 24 hours?",
     status: "planned",
     blurb:
-      "OVATION Prime aurora forecast over the 24h window — pick the latitude with the highest Kp-index probability.",
+      "30-site curated dark-sky list (Atacama, La Palma, Mauna Kea, …). Rank by cloud_cover_mean ascending.",
   },
 ];
 

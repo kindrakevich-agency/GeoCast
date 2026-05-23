@@ -79,6 +79,66 @@ class OpenMeteoClient
     }
 
     /**
+     * Daily MIN temperature for each (lat, lng) pair. Same shape as the
+     * max variants — used by the coldest-capital resolver.
+     *
+     * @param list<float> $lats
+     * @param list<float> $lngs
+     * @return list<float|null>
+     */
+    public function dailyMinTemperature(array $lats, array $lngs, \DateTimeImmutable $date): array
+    {
+        return $this->dailyScalar(self::FORECAST_BASE, 'temperature_2m_min', $lats, $lngs, $date);
+    }
+
+    /**
+     * Daily MIN temperature from the archive endpoint (observed).
+     *
+     * @param list<float> $lats
+     * @param list<float> $lngs
+     * @return list<float|null>
+     */
+    public function dailyMinTemperatureArchive(array $lats, array $lngs, \DateTimeImmutable $date): array
+    {
+        return $this->dailyScalar(self::ARCHIVE_BASE, 'temperature_2m_min', $lats, $lngs, $date);
+    }
+
+    /**
+     * Generic helper for "give me ONE daily scalar metric per city".
+     * Used by the min-temp variants above and will grow to support
+     * precipitation_sum, wind_gusts_10m_max, uv_index_max, etc. as
+     * more resolvers ship.
+     *
+     * @param list<float> $lats
+     * @param list<float> $lngs
+     * @return list<float|null>
+     */
+    private function dailyScalar(string $base, string $variable, array $lats, array $lngs, \DateTimeImmutable $date): array
+    {
+        $iso = $date->format('Y-m-d');
+        $payload = $this->call($base, [
+            'latitude'   => implode(',', $lats),
+            'longitude'  => implode(',', $lngs),
+            'daily'      => $variable,
+            'timezone'   => 'auto',
+            'start_date' => $iso,
+            'end_date'   => $iso,
+        ]);
+        $items = $this->itemsOf($payload, \count($lats));
+        $out = [];
+        foreach ($items as $item) {
+            $vals = $item['daily'][$variable] ?? null;
+            if (!\is_array($vals) || $vals === []) {
+                $out[] = null;
+                continue;
+            }
+            $first = $vals[0];
+            $out[] = $first === null ? null : (float) $first;
+        }
+        return $out;
+    }
+
+    /**
      * Hourly temperatures over the given UTC day. Used at resolution time
      * to break daily-temperature ties — two cities tying at 32.1°C on the
      * daily aggregate almost always peak in different hours.
