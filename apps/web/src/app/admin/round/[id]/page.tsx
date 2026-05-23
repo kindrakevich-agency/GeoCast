@@ -184,15 +184,74 @@ function OpenNowAction({ round, onDone }: { round: ApiAdminRound; onDone: () => 
 }
 
 function ResolvedSummary({ round }: { round: ApiAdminRound }) {
+  // Multi-winner: render every answer pin. answer_points carries the full
+  // list (set when the auto-resolver hit a true tie); when null, fall back
+  // to the single legacy answer_lat/answer_lng pair.
+  const points =
+    round.answerPoints && round.answerPoints.length > 0
+      ? round.answerPoints
+      : round.answer
+      ? [{ lat: round.answer.lat, lng: round.answer.lng, name: "" }]
+      : [];
+  if (points.length === 0) return null;
+
+  // Center on the first answer pin; for multi-winner rounds the camera
+  // sits on the primary point but all pins render. Zoom 4 is wide enough
+  // to give context but tight enough to actually see the country.
+  const primary = points[0];
+
   return (
-    <GlassPanel className="space-y-2 p-6">
-      <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">Answer</p>
-      <p className="font-[family-name:var(--font-jetbrains-mono)] text-sm">
-        {round.answer?.lat.toFixed(4)}, {round.answer?.lng.toFixed(4)}
-      </p>
-      <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
-        Resolved {round.resolvedAt}
-      </p>
+    <GlassPanel className="overflow-hidden p-0">
+      <div className="h-72 w-full">
+        <Map
+          mapStyle={MAP_STYLE}
+          initialViewState={{ longitude: primary.lng, latitude: primary.lat, zoom: 4 }}
+          attributionControl={false}
+          interactive={true}
+        >
+          {points.map((p, i) => (
+            <Marker key={i} longitude={p.lng} latitude={p.lat} anchor="bottom">
+              <span
+                className="block h-4 w-4 rounded-full"
+                style={{
+                  background: "var(--color-magenta)",
+                  boxShadow:
+                    "0 0 18px var(--color-magenta), 0 0 0 2px white, 0 0 0 3px var(--color-magenta)",
+                }}
+              />
+            </Marker>
+          ))}
+        </Map>
+      </div>
+      <div className="space-y-2 p-5">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
+          Answer{points.length > 1 ? ` · ${points.length} winners (tie)` : ""}
+        </p>
+        <ul className="space-y-0.5">
+          {points.map((p, i) => (
+            <li
+              key={i}
+              className="flex items-baseline gap-3 font-[family-name:var(--font-jetbrains-mono)] text-sm"
+            >
+              <span style={{ color: "var(--color-cyan)" }}>
+                {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
+              </span>
+              {p.name && (
+                <span className="text-[var(--color-text-muted)]">{p.name}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
+          Resolved{" "}
+          {round.resolvedAt
+            ? new Date(round.resolvedAt).toLocaleString(undefined, {
+                dateStyle: "short",
+                timeStyle: "short",
+              })
+            : "—"}
+        </p>
+      </div>
     </GlassPanel>
   );
 }
