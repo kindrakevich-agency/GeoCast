@@ -6,6 +6,11 @@ import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { useAdminContext } from "./AdminContext";
 import type { ApiAdminRound, RoundStatus } from "@/lib/api/types";
+import {
+  QUESTION_TEMPLATES,
+  type QuestionTemplate,
+  type TemplateStatus,
+} from "@/lib/question-templates";
 
 /**
  * /admin — resolver-roadmap dashboard. Each card is a "question template":
@@ -24,133 +29,9 @@ import type { ApiAdminRound, RoundStatus } from "@/lib/api/types";
  * auto-mirror landed.
  */
 
-type TemplateStatus = "live" | "planned";
-
-type QuestionTemplate = {
-  code: string;
-  source: string;
-  sourceUrl: string;
-  question: string;
-  status: TemplateStatus;
-  /** Short description for the "planned" state. Ignored when live. */
-  blurb: string;
-};
-
-const TEMPLATES: QuestionTemplate[] = [
-  // ---- LIVE ----
-  {
-    code: "openmeteo.hottest-capital",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the hottest world capital be in the next 24 hours?",
-    status: "live",
-    blurb:
-      "Daily forecast + observed archive across 244 candidates (195 UN capitals + 49 top metros). Two-stage tie-break: daily aggregate → hourly archive peak.",
-  },
-  {
-    code: "openmeteo.coldest-capital",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the coldest world capital be in the next 24 hours?",
-    status: "live",
-    blurb:
-      "Mirror image of hottest. Same 244-city dataset, ranked by daily temperature_2m_min ascending — Yakutsk, Reykjavik, Ulaanbaatar are regulars.",
-  },
-  {
-    code: "usgs.next-m5-earthquake",
-    source: "USGS Earthquakes",
-    sourceUrl: "https://earthquake.usgs.gov/",
-    question: "Where will the next M5+ earthquake strike in the next 24 hours?",
-    status: "live",
-    blurb:
-      "Real-time FDSN feed of M5+ events globally. ~4 M5+ per day worldwide; falls back to M4.5+ on quiet 24h windows (22% of random windows have zero M5+).",
-  },
-  {
-    code: "nasa-eonet.largest-wildfire",
-    source: "NASA EONET",
-    sourceUrl: "https://eonet.gsfc.nasa.gov/",
-    question: "Where will the largest active wildfire be in the next 24 hours?",
-    status: "live",
-    blurb:
-      "Earth Observatory Natural Event Tracker — pre-clustered wildfire events worldwide. Ranked by magnitudeValue (acres), falls back to most-recent update on size-less entries.",
-  },
-
-  // ---- PLANNED (Open-Meteo, same plumbing) ----
-  {
-    code: "openmeteo.heaviest-rainfall",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the heaviest rainfall fall in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Same 244-city dataset, ranked by 24h precipitation_sum instead of temperature.",
-  },
-  {
-    code: "openmeteo.strongest-wind-gust",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the strongest wind gust hit a coastal city in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Coastal subset (~85 cities flagged in WorldCapitals). Ranked by wind_gusts_10m_max over the 24h window.",
-  },
-  {
-    code: "openmeteo.biggest-temp-swing",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Which capital will have the biggest day-night temperature swing in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Rank by (temperature_2m_max − temperature_2m_min) over the 24h window. Desert capitals (Riyadh, Doha) dominate dry seasons.",
-  },
-  {
-    code: "openmeteo.highest-uv-index",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Where will the highest UV index reading land in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Rank by uv_index_max — equatorial + high-altitude cities (Quito, La Paz) lead consistently.",
-  },
-
-  // ---- PLANNED (other sources) ----
-  {
-    code: "noaa.next-tropical-storm",
-    source: "NOAA NHC",
-    sourceUrl: "https://www.nhc.noaa.gov/",
-    question: "Where will the next named-storm landfall happen in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "National Hurricane Center cone forecasts. Restricted to active basins (Atlantic / E-Pacific / W-Pacific via JMA + JTWC mirrors).",
-  },
-  {
-    code: "noaa.aurora-visibility",
-    source: "NOAA Space Weather",
-    sourceUrl: "https://www.swpc.noaa.gov/",
-    question: "Where will the aurora be visible in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "OVATION Prime aurora forecast — pick the southernmost latitude crossing the Kp-index visibility threshold.",
-  },
-  {
-    code: "gdelt.biggest-news-event",
-    source: "GDELT Project",
-    sourceUrl: "https://www.gdeltproject.org/",
-    question: "Where will the biggest geo-tagged news event happen in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "Realtime geo-tagged news, 24h window. Rank by event Goldstein scale + mention count.",
-  },
-  {
-    code: "openmeteo.clearest-stargazing",
-    source: "Open-Meteo",
-    sourceUrl: "https://open-meteo.com/",
-    question: "Which dark-sky site will have the clearest skies in the next 24 hours?",
-    status: "planned",
-    blurb:
-      "30-site curated dark-sky list (Atacama, La Palma, Mauna Kea, …). Rank by cloud_cover_mean ascending.",
-  },
-];
+// TEMPLATES + types live in @/lib/question-templates so the landing page,
+// admin dashboard, and (future) any API endpoint can share one source of
+// truth. To add a new planned template: append to QUESTION_TEMPLATES there.
 
 export default function AdminRoadmapPage() {
   const { rounds, isSettled } = useAdminContext();
@@ -169,8 +50,8 @@ export default function AdminRoadmapPage() {
     return m;
   }, [rounds]);
 
-  const live = TEMPLATES.filter((t) => t.status === "live");
-  const planned = TEMPLATES.filter((t) => t.status === "planned");
+  const live = QUESTION_TEMPLATES.filter((t) => t.status === "live");
+  const planned = QUESTION_TEMPLATES.filter((t) => t.status === "planned");
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">

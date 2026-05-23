@@ -10,6 +10,8 @@ import { Typewriter } from "@/components/ui/Typewriter";
 import { landingStats as mockStats } from "@/lib/landing-pins";
 import { useAuth } from "@/hooks/useAuth";
 import { useStats } from "@/hooks/useStats";
+import { QUESTION_TEMPLATES, ALL_QUESTIONS } from "@/lib/question-templates";
+import { ScoringMapVisualization } from "@/components/landing/ScoringMapVisualization";
 
 /**
  * Landing page. Five sections, all over the ambient world map background:
@@ -155,15 +157,10 @@ const STEPS = [
   },
 ];
 
-const EXAMPLE_QUESTIONS = [
-  "Where will the hottest European capital be in the next 24 hours?",
-  "Where will the next M5+ earthquake strike in the next 24 hours?",
-  "Where will the heaviest rainfall fall in the next 24 hours?",
-  "Where will the largest active wildfire be in the next 24 hours?",
-  "Where will the strongest wind gust hit a coastal capital in the next 24 hours?",
-  "Where will the biggest geo-tagged news event happen in the next 24 hours?",
-  "Where will the aurora be visible in the next 24 hours?",
-];
+// Typewriter cycles through every question the game asks — live + planned.
+// Single source of truth in @/lib/question-templates so /admin and / stay
+// synced as new resolvers ship.
+const EXAMPLE_QUESTIONS = ALL_QUESTIONS;
 
 function HowItWorksSection() {
   return (
@@ -224,49 +221,53 @@ function HowItWorksSection() {
 // they're fetched from public APIs by a cron at resolves_at. This is the
 // single most important credibility signal for a prediction game.
 
-const SOURCES = [
-  {
-    name: "Open-Meteo",
-    code: "openmeteo.*",
-    status: "live" as const,
-    statusAccent: "green" as const,
-    examples: [
-      "Hottest European capital in the next 24h",
-      "Heaviest rainfall in the next 24h",
-      "Strongest wind gust in the next 24h",
-    ],
-    blurb:
-      "Forecast + observed archive across ~47 curated capitals. Two-stage tie-break: daily aggregate → hourly archive peak.",
-    href: "https://open-meteo.com/",
-  },
-  {
-    name: "USGS Earthquakes",
-    code: "usgs.*",
-    status: "queued" as const,
-    statusAccent: "amber" as const,
-    examples: [
-      "Next M5+ earthquake in the next 24h",
-      "Strongest quake in the next 24h",
-    ],
-    blurb:
-      "Real-time FDSN feed of M2.5+ events worldwide. ~4 M5+ globally per day; graceful fallback to M4.5+ on quiet 24h windows.",
-    href: "https://earthquake.usgs.gov/",
-  },
-  {
-    name: "NASA FIRMS · GDELT · NOAA",
-    code: "nasa-firms.* / gdelt.* / noaa.*",
-    status: "planned" as const,
-    statusAccent: "cyan" as const,
-    examples: [
-      "Largest active wildfire in the next 24h",
-      "Biggest geo-tagged news event in the next 24h",
-      "Aurora visibility in the next 24h",
-    ],
-    blurb:
-      "Each source is a single Symfony class implementing ResolverInterface — code is open-source, drop-in extensible.",
-    href: "https://github.com/kindrakevich-agency/GeoCast",
-  },
-];
+// Group QUESTION_TEMPLATES by source name. One card per unique source —
+// status is "live" if AT LEAST ONE of its templates is live, else "planned".
+// Auto-folds when we ship new sources; no manual sync.
+type SourceCard = {
+  name: string;
+  href: string;
+  status: "live" | "planned";
+  statusAccent: "green" | "cyan";
+  examples: string[];
+  liveCount: number;
+  plannedCount: number;
+};
+
+const SOURCES: SourceCard[] = (() => {
+  const grouped = new Map<string, SourceCard>();
+  for (const t of QUESTION_TEMPLATES) {
+    const card = grouped.get(t.source) ?? {
+      name: t.source,
+      href: t.sourceUrl,
+      status: "planned",
+      statusAccent: "cyan",
+      examples: [],
+      liveCount: 0,
+      plannedCount: 0,
+    };
+    if (t.status === "live") {
+      card.liveCount += 1;
+      card.status = "live";
+      card.statusAccent = "green";
+    } else {
+      card.plannedCount += 1;
+    }
+    if (card.examples.length < 3) {
+      // Strip the leading "Where will" / "Which" for a tighter card bullet.
+      card.examples.push(
+        t.question.replace(/^Where will (the )?/i, "").replace(/\?$/, ""),
+      );
+    }
+    grouped.set(t.source, card);
+  }
+  // Live sources first, then planned. Within each group, more live-templates
+  // first.
+  return Array.from(grouped.values()).sort((a, b) => {
+    if (a.status !== b.status) return a.status === "live" ? -1 : 1;
+    return b.liveCount - a.liveCount;
+  });
+})();
 
 function ResolutionSourcesSection() {
   return (
@@ -316,21 +317,17 @@ function ResolutionSourcesSection() {
               className="block transition-transform hover:-translate-y-0.5"
             >
               <GlassPanel className="h-full p-6">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-[family-name:var(--font-space-grotesk)] text-base font-semibold">
-                      {s.name}
-                    </h3>
-                    <p className="mt-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                      {s.code}
-                    </p>
-                  </div>
-                  <StatusPill status={s.status} accent={s.statusAccent} />
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <h3 className="font-[family-name:var(--font-space-grotesk)] text-base font-semibold">
+                    {s.name}
+                  </h3>
+                  <StatusPill
+                    status={s.status}
+                    accent={s.statusAccent}
+                    liveCount={s.liveCount}
+                    plannedCount={s.plannedCount}
+                  />
                 </div>
-
-                <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
-                  {s.blurb}
-                </p>
 
                 <p className="mb-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
                   Example questions
@@ -408,10 +405,21 @@ function PipelineStep({
 function StatusPill({
   status,
   accent,
+  liveCount,
+  plannedCount,
 }: {
-  status: "live" | "queued" | "planned";
+  status: "live" | "planned";
   accent: "cyan" | "magenta" | "amber" | "green";
+  liveCount?: number;
+  plannedCount?: number;
 }) {
+  // For source cards, optionally surface the live/planned breakdown as
+  // a small count after the pill so visitors can see at-a-glance how
+  // much of a source is already shipped vs. still queued.
+  const detail =
+    liveCount !== undefined && plannedCount !== undefined
+      ? ` · ${liveCount} live / ${plannedCount} planned`
+      : "";
   return (
     <span
       className="shrink-0 rounded-full border px-2 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[9px] uppercase tracking-[0.22em]"
@@ -423,11 +431,10 @@ function StatusPill({
             className="mr-1.5 inline-block h-1 w-1 animate-pulse rounded-full align-middle"
             style={{ background: `var(--color-${accent})`, boxShadow: `0 0 6px var(--color-${accent})` }}
           />
-          live
+          live{detail}
         </>
       )}
-      {status === "queued" && "queued"}
-      {status === "planned" && "planned"}
+      {status === "planned" && <>planned{detail}</>}
     </span>
   );
 }
@@ -439,63 +446,24 @@ function ScoringSection() {
     <section className="relative w-full px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl">
         <SectionEyebrow>The math</SectionEyebrow>
-        <h2 className="mb-12 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
+        <h2 className="mb-6 max-w-3xl font-[family-name:var(--font-space-grotesk)] text-[clamp(1.8rem,4vw,2.6rem)] font-semibold leading-tight tracking-tight">
           Scoring is{" "}
           <span style={{ color: "var(--color-amber)" }}>inverse distance</span>.
           Long-tail friendly.
         </h2>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.5 }}
-          >
-            <GlassPanel className="space-y-5 p-7">
-              <p className="text-sm text-[var(--color-text-muted)]">
-                For each prediction at haversine distance <Tk>d</Tk> km from the truth,
-                we compute a raw score:
-              </p>
-              <Formula>
-                raw_score ={" "}
-                <span style={{ color: "var(--color-cyan)" }}>1 / (1 + d)</span>
-              </Formula>
-              <p className="text-sm text-[var(--color-text-muted)]">
-                Then your payout is your share of the pool:
-              </p>
-              <Formula>
-                payout = <Tk>floor</Tk>(pool ×{" "}
-                <span style={{ color: "var(--color-magenta)" }}>raw_score</span> /
-                Σ raw_scores)
-              </Formula>
-              <p className="text-sm text-[var(--color-text-muted)]">
-                That single curve does two things at once: the closest pin always
-                takes the biggest share, but a pin 2,000 km off still earns a sliver.
-                Long-tail engagement, no zero-sum trap.
-              </p>
-            </GlassPanel>
-          </motion.div>
+        <p className="mb-10 max-w-3xl text-base leading-relaxed text-[var(--color-text-muted)]">
+          For a pin at haversine distance{" "}
+          <Tk>d</Tk> km from the truth, raw score ={" "}
+          <span style={{ color: "var(--color-cyan)" }}>1 / (1 + d)</span>. Your
+          payout is your share of the pool: <Tk>floor</Tk>(pool ×{" "}
+          <span style={{ color: "var(--color-magenta)" }}>your_raw_score</span>{" "}
+          / Σ all_raw_scores). The closest pin always takes the biggest share,
+          but a pin 2,000 km off still earns a sliver — long-tail engagement,
+          no zero-sum trap.
+        </p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <GlassPanel className="space-y-3 p-7">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
-                Example · 100-credit pool · 3 players
-              </p>
-              <ExampleRow rank={1} distance={12} share={87} color="green" />
-              <ExampleRow rank={2} distance={340} share={9} color="cyan" />
-              <ExampleRow rank={3} distance={1820} share={2} color="amber" />
-              <p className="pt-2 text-[10px] text-[var(--color-text-muted)] opacity-70">
-                Resolved pool: 98 cr (rounding leaves 2 cr in the protocol bucket)
-              </p>
-            </GlassPanel>
-          </motion.div>
-        </div>
+        <ScoringMapVisualization />
       </div>
     </section>
   );
